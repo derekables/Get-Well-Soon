@@ -1,0 +1,108 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
+[ext_resource type="PackedScene" path="res://scenes/heart.tscn" id="2_heart"]
+[ext_resource type="PackedScene" path="res://scenes/germ.tscn" id="3_germ"]
+[ext_resource type="Script" path="res://scripts/game.gd" id="4_game"]
+
+[node name="Game" type="Node2D"]
+script = ExtResource("4_game")
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 960.0
+offset_bottom = 540.0
+color = Color(0.92549, 0.968627, 1, 1)
+
+[node name="PlayArea" type="ColorRect" parent="."]
+offset_left = 24.0
+offset_top = 72.0
+offset_right = 936.0
+offset_bottom = 492.0
+color = Color(1, 1, 1, 1)
+
+[node name="Bed" type="ColorRect" parent="."]
+offset_left = 44.0
+offset_top = 94.0
+offset_right = 154.0
+offset_bottom = 174.0
+color = Color(0.678431, 0.847059, 0.901961, 1)
+
+[node name="Player" parent="." instance=ExtResource("1_player")]
+position = Vector2(96, 136)
+
+[node name="Coins" type="Node2D" parent="."]
+
+[node name="Heart1" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(245, 125)
+
+[node name="Heart2" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(420, 115)
+
+[node name="Heart3" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(720, 138)
+
+[node name="Heart4" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(850, 230)
+
+[node name="Heart5" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(650, 255)
+
+[node name="Heart6" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(335, 265)
+
+[node name="Heart7" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(150, 325)
+
+[node name="Heart8" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(500, 390)
+
+[node name="Heart9" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(780, 410)
+
+[node name="Heart10" parent="Coins" instance=ExtResource("2_heart")]
+position = Vector2(250, 450)
+
+[node name="Hazards" type="Node2D" parent="."]
+
+[node name="Germ1" parent="Hazards" instance=ExtResource("3_germ")]
+position = Vector2(285, 195)
+
+[node name="Germ2" parent="Hazards" instance=ExtResource("3_germ")]
+position = Vector2(530, 195)
+
+[node name="Germ3" parent="Hazards" instance=ExtResource("3_germ")]
+position = Vector2(735, 315)
+
+[node name="Germ4" parent="Hazards" instance=ExtResource("3_germ")]
+position = Vector2(395, 425)
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="MarginContainer" type="MarginContainer" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/MarginContainer"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Get Well Soon"
+horizontal_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Hearts: 0 / 10"
+
+[node name="MessageLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Collect all hearts while avoiding the germs."
+
+[node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Move: WASD or Arrow Keys   Restart: R"
