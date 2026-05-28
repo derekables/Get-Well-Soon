@@ -1,0 +1,16 @@
+# Godot local/editor-generated data
+.godot/
+.import/
+*.import
+
+# Exported builds
+builds/
+exports/
+*.exe
+*.app
+*.x86_64
+*.zip
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
