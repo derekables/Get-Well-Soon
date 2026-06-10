@@ -11,21 +11,21 @@ script = ExtResource("4_game")
 [node name="Background" type="ColorRect" parent="."]
 offset_right = 960.0
 offset_bottom = 540.0
-color = Color(0.92549, 0.968627, 1, 1)
+color = Color(0.12, 0.13, 0.16, 1)
 
 [node name="PlayArea" type="ColorRect" parent="."]
 offset_left = 24.0
 offset_top = 72.0
 offset_right = 936.0
 offset_bottom = 492.0
-color = Color(1, 1, 1, 1)
+color = Color(0.18, 0.19, 0.21, 1)
 
 [node name="Bed" type="ColorRect" parent="."]
 offset_left = 44.0
 offset_top = 94.0
 offset_right = 154.0
 offset_bottom = 174.0
-color = Color(0.678431, 0.847059, 0.901961, 1)
+color = Color(0.23, 0.22, 0.2, 1)
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
 position = Vector2(96, 136)
@@ -76,6 +76,10 @@ position = Vector2(735, 315)
 [node name="Germ4" parent="Hazards" instance=ExtResource("3_germ")]
 position = Vector2(395, 425)
 
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Items" type="Node2D" parent="."]
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="MarginContainer" type="MarginContainer" parent="UI"]
@@ -92,17 +96,34 @@ layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Get Well Soon"
+text = "Get Well Soon: Street Survival Prototype"
 horizontal_alignment = 1
+
+[node name="HealthLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Health: 100 / 100   Damage: 16"
+
+[node name="StaminaLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Stamina: 100 / 100   Grit: 0"
 
 [node name="ScoreLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Hearts: 0 / 10"
+text = "Supplies: 0 / 10   Wave: 1"
+
+[node name="StatusLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Status: steady"
 
 [node name="MessageLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Collect all hearts while avoiding the germs."
+text = "Living the streets prototype: fast melee, stamina, grit, pickups, and risky status effects."
 
 [node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Move: WASD or Arrow Keys   Restart: R"
+text = "Move: WASD/Arrows   Attack: Space/J   Dash: Shift/K   Restart: R"
+
+[node name="CombatLogLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Log: ready"
+autowrap_mode = 3

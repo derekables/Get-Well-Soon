@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy.gd" id="1_enemy"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_enemy"]
+size = Vector2(32, 32)
+
+[node name="StreetEnemy" type="CharacterBody2D"]
+script = ExtResource("1_enemy")
+
+[node name="Body" type="Polygon2D" parent="."]
+color = Color(0.78, 0.24, 0.19, 1)
+polygon = PackedVector2Array(-16, -18, 16, -18, 20, 6, 10, 18, -12, 18, -20, 5)
+
+[node name="Eyes" type="Polygon2D" parent="."]
+color = Color(0.08, 0.06, 0.05, 1)
+polygon = PackedVector2Array(-10, -6, -5, -8, -2, -5, 5, -8, 11, -6, 8, -2, 2, -4, -4, -2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_enemy")
+
+[node name="HealthBar" type="Node2D" parent="."]
+position = Vector2(-16, -29)
+
+[node name="Back" type="ColorRect" parent="HealthBar"]
+offset_right = 32.0
+offset_bottom = 4.0
+color = Color(0.08, 0.08, 0.08, 1)
+
+[node name="Fill" type="ColorRect" parent="HealthBar"]
+offset_right = 32.0
+offset_bottom = 4.0
+color = Color(0.9, 0.12, 0.16, 1)

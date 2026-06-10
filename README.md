@@ -1,31 +1,44 @@
 # Get Well Soon
 
-**Get Well Soon** is a tiny Godot learning project: collect all 10 hearts, dodge the germs, and make it back to full health.
+**Get Well Soon** is becoming a fast real-time Godot survival/fighting prototype about making it through a rough street-level night while managing health, stamina, supplies, and unstable buffs/debuffs.
 
 This repository is meant to be the source-of-truth copy that can move between Codex, GitHub, and the Godot Web Editor.
 
-## Current starting build
+## Current prototype build
 
 - **Engine target:** Godot 4.x, GDScript, Compatibility renderer friendly.
 - **Main scene:** `res://scenes/main.tscn`
-- **Controls:** WASD or Arrow Keys to move, `R` to restart.
-- **Goal:** collect every heart without touching the germs.
-- **Learning focus:** scenes, nodes, scripts, collision areas, signals, labels, and simple game state.
+- **Controls:** WASD or Arrow Keys to move, `Space`/`J` to attack, `Shift`/`K` to dash, `R` to restart.
+- **Core loop:** collect supplies, fight wave-based street threats, grab random items, and survive risky status effects.
+- **Combat feel:** fast melee hitboxes, short attack cooldowns, stamina pressure, dash invulnerability, knockback, and escalating waves.
+- **Prototype systems:** health, stamina, grit, supplies, enemy health bars, random item generation, psychosis, withdrawal, insomnia, and temporary weapon buffs.
 
 ## Project map
 
 ```text
-project.godot          Godot project settings and input actions
-icon.svg               Simple project icon
-scenes/main.tscn       Main level and UI
-scenes/player.tscn     Player scene
-scenes/heart.tscn      Collectible heart scene
-scenes/germ.tscn       Hazard scene
-scripts/game.gd        Score, win state, restart, and signal wiring
-scripts/player.gd      Player movement and play-area clamping
-scripts/coin.gd        Heart pickup behavior
-scripts/hazard.gd      Germ touch behavior
+project.godot              Godot project settings and input actions
+icon.svg                   Simple project icon
+scenes/main.tscn           Main arena, UI, supply pickups, hazards, enemy/item containers
+scenes/player.tscn         Player scene with melee attack area
+scenes/enemy.tscn          Wave enemy scene with health bar
+scenes/item_pickup.tscn    Random pickup scene
+scenes/heart.tscn          Supply collectible scene
+scenes/germ.tscn           Contact hazard scene
+scripts/game.gd            Combat loop, waves, item generation, UI, restart, signal wiring
+scripts/player.gd          Movement, attacks, dash, health, stamina, grit, statuses
+scripts/enemy.gd           Enemy chase/attack/take-hit behavior
+scripts/item_pickup.gd     Item pickup configuration and pickup signal
+scripts/coin.gd            Supply pickup behavior
+scripts/hazard.gd          Hazard touch behavior
 ```
+
+## Combat/status notes for customization
+
+- **Grit** rises when fighting and collecting supplies; it increases attack damage over time.
+- **Stamina** fuels attacks and dashes. Insomnia boosts regen/speed; withdrawal slows regen and causes damage ticks.
+- **Psychosis** currently makes movement less stable, raises incoming damage, and adds offensive damage.
+- **Random items** are defined in `scripts/game.gd` in `ITEM_TABLE`, then spawned as `scenes/item_pickup.tscn` instances.
+- **Enemy scaling** happens in `scripts/enemy.gd::setup()`, which increases health, speed, damage, and reward by wave.
 
 ## How to open this in the Godot Web Editor
 
@@ -54,9 +67,8 @@ Because the Web Editor stores files inside the browser, treat GitHub/this repo a
 
 ## Good next learning tasks
 
-- Add a start screen with a **Play** button.
-- Add simple moving germs.
-- Add a timer.
-- Add a health counter instead of instantly resetting to bed.
-- Replace the shape art with sprites you draw yourself.
-- Add sound effects for heart pickup and germ touch.
+- Tune attack range, cooldown, dash cost, and enemy speed until the fight feels right.
+- Replace placeholder polygons with sprites and animations.
+- Split item/status definitions into data resources once the list grows.
+- Add ranged enemies, blocking, heavy attacks, and item inventory choices.
+- Add sound effects and camera shake for hit confirmation.
