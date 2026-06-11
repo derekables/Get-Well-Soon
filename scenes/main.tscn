@@ -1,8 +1,6 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
-[ext_resource type="PackedScene" path="res://scenes/heart.tscn" id="2_heart"]
-[ext_resource type="PackedScene" path="res://scenes/germ.tscn" id="3_germ"]
 [ext_resource type="Script" path="res://scripts/game.gd" id="4_game"]
 
 [node name="Game" type="Node2D"]
@@ -18,9 +16,9 @@ offset_left = 24.0
 offset_top = 72.0
 offset_right = 936.0
 offset_bottom = 492.0
-color = Color(0.18, 0.19, 0.21, 1)
+color = Color(0.15, 0.15, 0.17, 1)
 
-[node name="Bed" type="ColorRect" parent="."]
+[node name="SafeCorner" type="ColorRect" parent="."]
 offset_left = 44.0
 offset_top = 94.0
 offset_right = 154.0
@@ -30,51 +28,23 @@ color = Color(0.23, 0.22, 0.2, 1)
 [node name="Player" parent="." instance=ExtResource("1_player")]
 position = Vector2(96, 136)
 
-[node name="Coins" type="Node2D" parent="."]
+[node name="Supplies" type="Node2D" parent="."]
 
-[node name="Heart1" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(245, 125)
+[node name="PressureZones" type="Node2D" parent="."]
 
-[node name="Heart2" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(420, 115)
+[node name="StreetDivider" type="ColorRect" parent="."]
+offset_left = 24.0
+offset_top = 276.0
+offset_right = 936.0
+offset_bottom = 286.0
+color = Color(0.08, 0.08, 0.09, 1)
 
-[node name="Heart3" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(720, 138)
-
-[node name="Heart4" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(850, 230)
-
-[node name="Heart5" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(650, 255)
-
-[node name="Heart6" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(335, 265)
-
-[node name="Heart7" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(150, 325)
-
-[node name="Heart8" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(500, 390)
-
-[node name="Heart9" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(780, 410)
-
-[node name="Heart10" parent="Coins" instance=ExtResource("2_heart")]
-position = Vector2(250, 450)
-
-[node name="Hazards" type="Node2D" parent="."]
-
-[node name="Germ1" parent="Hazards" instance=ExtResource("3_germ")]
-position = Vector2(285, 195)
-
-[node name="Germ2" parent="Hazards" instance=ExtResource("3_germ")]
-position = Vector2(530, 195)
-
-[node name="Germ3" parent="Hazards" instance=ExtResource("3_germ")]
-position = Vector2(735, 315)
-
-[node name="Germ4" parent="Hazards" instance=ExtResource("3_germ")]
-position = Vector2(395, 425)
+[node name="AlleyShadow" type="ColorRect" parent="."]
+offset_left = 790.0
+offset_top = 72.0
+offset_right = 936.0
+offset_bottom = 492.0
+color = Color(0.08, 0.085, 0.1, 0.8)
 
 [node name="Enemies" type="Node2D" parent="."]
 
@@ -96,7 +66,7 @@ layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Get Well Soon: Street Survival Prototype"
+text = "Get Well Soon: Night Shift Prototype"
 horizontal_alignment = 1
 
 [node name="HealthLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
@@ -109,7 +79,7 @@ text = "Stamina: 100 / 100   Grit: 0"
 
 [node name="ScoreLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Supplies: 0 / 10   Wave: 1"
+text = "Supplies: 0 / 8   Wave: 1"
 
 [node name="StatusLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -117,7 +87,7 @@ text = "Status: steady"
 
 [node name="MessageLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Living the streets prototype: fast melee, stamina, grit, pickups, and risky status effects."
+text = "Survive the block, gather supplies, and manage risky status effects."
 
 [node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2

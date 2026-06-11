@@ -1,8 +1,12 @@
 extends Node2D
 
-const TOTAL_SUPPLIES := 10
+const TOTAL_SUPPLIES := 8
+const STARTING_SUPPLY_CACHES := 8
+const STARTING_PRESSURE_ZONES := 5
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
+const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
+const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
 const PLAY_RECT := Rect2(24, 72, 912, 420)
 const ITEM_TABLE := [
 	{
@@ -40,8 +44,8 @@ const ITEM_TABLE := [
 @onready var message_label: Label = $UI/MarginContainer/VBoxContainer/MessageLabel
 @onready var restart_label: Label = $UI/MarginContainer/VBoxContainer/RestartLabel
 @onready var combat_log_label: Label = $UI/MarginContainer/VBoxContainer/CombatLogLabel
-@onready var coins: Node2D = $Coins
-@onready var hazards: Node2D = $Hazards
+@onready var supply_caches: Node2D = $Supplies
+@onready var pressure_zones: Node2D = $PressureZones
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
 
@@ -59,36 +63,34 @@ func _ready() -> void:
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
 	player.knocked_out.connect(_on_player_knocked_out)
-	for coin in coins.get_children():
-		coin.collected.connect(_on_supply_collected)
-	for hazard in hazards.get_children():
-		hazard.touched.connect(_on_hazard_touched)
+	_spawn_supply_caches(STARTING_SUPPLY_CACHES)
+	_spawn_pressure_zones(STARTING_PRESSURE_ZONES)
 	_spawn_wave(wave)
-	_spawn_loose_items(4)
-	_set_log("Fast real-time combat online. Keep moving, dash through danger, and use whatever you find.")
+	_spawn_loose_items(3)
+	_set_log("Night shift online. Gather real supplies, avoid pressure zones, and fight only when you must.")
 	_update_ui()
 
 func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 
-func _on_supply_collected(coin: Area2D) -> void:
+func _on_supply_collected(cache: Area2D) -> void:
 	if game_over:
 		return
 	supplies += 1
 	player.add_supply(1)
-	coin.queue_free()
-	_set_log("Found supplies. Grit and stamina up.")
+	cache.queue_free()
+	_set_log("Found a supply cache. Grit and stamina up.")
 	if supplies >= TOTAL_SUPPLIES:
 		_set_log("Supply run complete. You can keep fighting waves or press R to restart.")
 	_update_ui()
 
-func _on_hazard_touched() -> void:
+func _on_pressure_zone_triggered() -> void:
 	if game_over:
 		return
 	player.take_damage(8)
 	player.apply_status("psychosis", 5.0, 1.0)
-	_set_log("A bad contact rattled you: psychosis risk spiked.")
+	_set_log("A pressure zone rattled you: psychosis risk spiked.")
 
 func _on_item_picked_up(item: Area2D, item_data: Dictionary) -> void:
 	if game_over:
@@ -143,6 +145,22 @@ func _spawn_wave(level: int) -> void:
 		enemy.struck_player.connect(_on_enemy_struck_player)
 	_set_log("Wave %d rolled in: %d threats on the block." % [level, count])
 
+func _spawn_supply_caches(count: int) -> void:
+	for i in range(count):
+		var cache := SUPPLY_CACHE_SCENE.instantiate()
+		cache.name = "SupplyCache%d" % (i + 1)
+		cache.global_position = _random_play_position()
+		supply_caches.add_child(cache)
+		cache.collected.connect(_on_supply_collected)
+
+func _spawn_pressure_zones(count: int) -> void:
+	for i in range(count):
+		var zone := PRESSURE_ZONE_SCENE.instantiate()
+		zone.name = "PressureZone%d" % (i + 1)
+		zone.global_position = _random_play_position()
+		pressure_zones.add_child(zone)
+		zone.triggered.connect(_on_pressure_zone_triggered)
+
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
 		_spawn_item(_random_play_position())
@@ -157,8 +175,8 @@ func _spawn_item(spawn_position: Vector2) -> void:
 
 func _random_play_position() -> Vector2:
 	return Vector2(
-		_rng.randf_range(PLAY_RECT.position.x + 24.0, PLAY_RECT.end.x - 24.0),
-		_rng.randf_range(PLAY_RECT.position.y + 24.0, PLAY_RECT.end.y - 24.0)
+		_rng.randf_range(PLAY_RECT.position.x + 44.0, PLAY_RECT.end.x - 44.0),
+		_rng.randf_range(PLAY_RECT.position.y + 44.0, PLAY_RECT.end.y - 44.0)
 	)
 
 func _random_edge_position() -> Vector2:
@@ -179,7 +197,7 @@ func _set_log(text: String) -> void:
 		combat_log_label.text = "Log: " + _combat_log
 
 func _update_ui() -> void:
-	message_label.text = "Living the streets prototype: fast melee, stamina, grit, pickups, and risky status effects."
+	message_label.text = "Survive the block, gather supplies, and manage risky status effects."
 	restart_label.text = "Move: WASD/Arrows   Attack: Space/J   Dash: Shift/K   Restart: R"
 	score_label.text = "Supplies: %d / %d   Wave: %d" % [supplies, TOTAL_SUPPLIES, wave]
 	if combat_log_label != null:

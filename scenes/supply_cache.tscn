@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/supply_cache.gd" id="1_supply_cache"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_supply_cache"]
+radius = 18.0
+
+[node name="SupplyCache" type="Area2D"]
+script = ExtResource("1_supply_cache")
+
+[node name="Bag" type="Polygon2D" parent="."]
+color = Color(0.89, 0.72, 0.35, 1)
+polygon = PackedVector2Array(-18, -7, -10, -19, 10, -19, 18, -7, 15, 18, -15, 18)
+
+[node name="Strap" type="Polygon2D" parent="."]
+color = Color(0.34, 0.24, 0.15, 1)
+polygon = PackedVector2Array(-7, -7, 7, -7, 7, 1, -7, 1)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_supply_cache")

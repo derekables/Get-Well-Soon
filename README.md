@@ -9,7 +9,7 @@ This repository is meant to be the source-of-truth copy that can move between Co
 - **Engine target:** Godot 4.x, GDScript, Compatibility renderer friendly.
 - **Main scene:** `res://scenes/main.tscn`
 - **Controls:** WASD or Arrow Keys to move, `Space`/`J` to attack, `Shift`/`K` to dash, `R` to restart.
-- **Core loop:** collect supplies, fight wave-based street threats, grab random items, and survive risky status effects.
+- **Core loop:** gather supply caches, fight wave-based street threats, grab random items, and avoid pressure zones that trigger risky status effects.
 - **Combat feel:** fast melee hitboxes, short attack cooldowns, stamina pressure, dash invulnerability, knockback, and escalating waves.
 - **Prototype systems:** health, stamina, grit, supplies, enemy health bars, random item generation, psychosis, withdrawal, insomnia, and temporary weapon buffs.
 
@@ -18,18 +18,18 @@ This repository is meant to be the source-of-truth copy that can move between Co
 ```text
 project.godot              Godot project settings and input actions
 icon.svg                   Simple project icon
-scenes/main.tscn           Main arena, UI, supply pickups, hazards, enemy/item containers
+scenes/main.tscn           Main arena, UI, procedural supply/pressure setup, enemy/item containers
 scenes/player.tscn         Player scene with melee attack area
 scenes/enemy.tscn          Wave enemy scene with health bar
 scenes/item_pickup.tscn    Random pickup scene
-scenes/heart.tscn          Supply collectible scene
-scenes/germ.tscn           Contact hazard scene
+scenes/supply_cache.tscn   Supply cache collectible scene
+scenes/pressure_zone.tscn  Contact pressure-zone scene
 scripts/game.gd            Combat loop, waves, item generation, UI, restart, signal wiring
 scripts/player.gd          Movement, attacks, dash, health, stamina, grit, statuses
 scripts/enemy.gd           Enemy chase/attack/take-hit behavior
 scripts/item_pickup.gd     Item pickup configuration and pickup signal
-scripts/coin.gd            Supply pickup behavior
-scripts/hazard.gd          Hazard touch behavior
+scripts/supply_cache.gd    Supply cache pickup behavior
+scripts/pressure_zone.gd   Pressure-zone touch behavior
 ```
 
 ## Combat/status notes for customization
@@ -37,6 +37,7 @@ scripts/hazard.gd          Hazard touch behavior
 - **Grit** rises when fighting and collecting supplies; it increases attack damage over time.
 - **Stamina** fuels attacks and dashes. Insomnia boosts regen/speed; withdrawal slows regen and causes damage ticks.
 - **Psychosis** currently makes movement less stable, raises incoming damage, and adds offensive damage.
+- **Supply caches and pressure zones** are spawned at runtime by `scripts/game.gd`, keeping the starting map free of heart/germ placeholders.
 - **Random items** are defined in `scripts/game.gd` in `ITEM_TABLE`, then spawned as `scenes/item_pickup.tscn` instances.
 - **Enemy scaling** happens in `scripts/enemy.gd::setup()`, which increases health, speed, damage, and reward by wave.
 
@@ -68,7 +69,7 @@ Because the Web Editor stores files inside the browser, treat GitHub/this repo a
 ## Good next learning tasks
 
 - Tune attack range, cooldown, dash cost, and enemy speed until the fight feels right.
-- Replace placeholder polygons with sprites and animations.
+- Replace the remaining prototype polygons with sprites and animations.
 - Split item/status definitions into data resources once the list grows.
 - Add ranged enemies, blocking, heavy attacks, and item inventory choices.
 - Add sound effects and camera shake for hit confirmation.
