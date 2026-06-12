@@ -66,7 +66,7 @@ layout_mode = 2
 
 [node name="TitleLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Get Well Soon: Night Shift Prototype"
+text = "Get Well Soon: Day / Night Survival Prototype"
 horizontal_alignment = 1
 
 [node name="HealthLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
@@ -79,7 +79,7 @@ text = "Stamina: 100 / 100   Grit: 0"
 
 [node name="ScoreLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Supplies: 0 / 8   Wave: 1"
+text = "Day 1  Time: 00:50  Nights: 0  Danger: 1"
 
 [node name="StatusLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -87,7 +87,7 @@ text = "Status: steady"
 
 [node name="MessageLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Survive the block, gather supplies, and manage risky status effects."
+text = "Day 1: collect Fet-D, food, weapons, and gear before night falls."
 
 [node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
