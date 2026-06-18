@@ -72,8 +72,26 @@ func add_supply(amount: int = 1) -> void:
 	grit += 1
 	_emit_all_stats()
 
+func recover_between_phases(health_amount: int, stamina_amount: float) -> void:
+	heal(health_amount)
+	stamina = min(max_stamina, stamina + stamina_amount)
+	_emit_all_stats()
+
 func apply_item(item_data: Dictionary) -> void:
 	match item_data.get("kind", "scrap"):
+		"fet_d":
+			heal(12)
+			clear_status("withdrawal")
+			apply_status("well", 18.0, 1.0)
+		"food":
+			heal(8)
+			stamina = min(max_stamina, stamina + 22.0)
+		"weapon":
+			apply_status("armed", 18.0, 1.0)
+			grit += 2
+		"gear":
+			stamina = min(max_stamina, stamina + 14.0)
+			grit += 1
 		"bandage":
 			heal(24)
 		"coffee":
@@ -94,6 +112,11 @@ func apply_status(status_name: String, duration: float, intensity: float = 1.0) 
 		"intensity": intensity,
 	}
 	_emit_status_text()
+
+func clear_status(status_name: String) -> void:
+	if _statuses.has(status_name):
+		_statuses.erase(status_name)
+		_emit_status_text()
 
 func take_damage(amount: int, source: Node2D = null) -> void:
 	if _invulnerable_timer > 0.0 or health <= 0:
@@ -122,7 +145,7 @@ func get_attack_damage() -> int:
 		damage += 10
 	if _statuses.has("insomnia"):
 		damage += 3
-	if _statuses.has("withdrawal"):
+	if _statuses.has("withdrawal") and not _statuses.has("well"):
 		damage = int(floor(damage * 0.82))
 	if _statuses.has("psychosis"):
 		damage += 6
@@ -210,7 +233,7 @@ func _update_statuses(delta: float) -> void:
 	_status_tick_timer -= delta
 	if _status_tick_timer <= 0.0:
 		_status_tick_timer = 1.0
-		if _statuses.has("withdrawal"):
+		if _statuses.has("withdrawal") and not _statuses.has("well"):
 			take_damage(1)
 		if _statuses.has("psychosis"):
 			stamina = max(0.0, stamina - 2.0)
@@ -219,7 +242,7 @@ func _update_statuses(delta: float) -> void:
 
 func _regenerate_stamina(delta: float) -> void:
 	var regen := 18.0
-	if _statuses.has("withdrawal"):
+	if _statuses.has("withdrawal") and not _statuses.has("well"):
 		regen *= 0.45
 	if _statuses.has("insomnia"):
 		regen *= 1.45
@@ -227,7 +250,7 @@ func _regenerate_stamina(delta: float) -> void:
 
 func _speed_multiplier() -> float:
 	var multiplier := 1.0
-	if _statuses.has("withdrawal"):
+	if _statuses.has("withdrawal") and not _statuses.has("well"):
 		multiplier -= 0.18
 	if _statuses.has("insomnia"):
 		multiplier += 0.16
@@ -239,7 +262,7 @@ func _attack_speed_multiplier() -> float:
 	var multiplier := 1.0
 	if _statuses.has("insomnia"):
 		multiplier *= 0.78
-	if _statuses.has("withdrawal"):
+	if _statuses.has("withdrawal") and not _statuses.has("well"):
 		multiplier *= 1.22
 	return multiplier
 

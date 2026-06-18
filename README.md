@@ -1,6 +1,6 @@
 # Get Well Soon
 
-**Get Well Soon** is becoming a fast real-time Godot survival/fighting prototype about making it through a rough street-level night while managing health, stamina, supplies, and unstable buffs/debuffs.
+**Get Well Soon** is becoming a fast real-time Godot survival/fighting prototype about making it through escalating street-level days and nights while managing health, stamina, survival supplies, and unstable buffs/debuffs.
 
 This repository is meant to be the source-of-truth copy that can move between Codex, GitHub, and the Godot Web Editor.
 
@@ -9,9 +9,10 @@ This repository is meant to be the source-of-truth copy that can move between Co
 - **Engine target:** Godot 4.x, GDScript, Compatibility renderer friendly.
 - **Main scene:** `res://scenes/main.tscn`
 - **Controls:** WASD or Arrow Keys to move, `Space`/`J` to attack, `Shift`/`K` to dash, `R` to restart.
-- **Core loop:** gather supply caches, fight wave-based street threats, grab random items, and avoid pressure zones that trigger risky status effects.
+- **Core loop:** use each day to scavenge enough Fet-D, food, weapons, gear, and flexible supplies to qualify for the next night, then survive until dawn.
+- **Day/night progression:** every new day raises the next night’s requirements and every new night increases pressure zones, enemy counts, and danger scaling.
 - **Combat feel:** fast melee hitboxes, short attack cooldowns, stamina pressure, dash invulnerability, knockback, and escalating waves.
-- **Prototype systems:** health, stamina, grit, supplies, enemy health bars, random item generation, psychosis, withdrawal, insomnia, and temporary weapon buffs.
+- **Prototype systems:** health, stamina, grit, day/night timers, survival inventory, supply requirements, enemy health bars, random item generation, psychosis, withdrawal, insomnia, and temporary weapon buffs.
 
 ## Project map
 
@@ -37,9 +38,10 @@ scripts/pressure_zone.gd   Pressure-zone touch behavior
 - **Grit** rises when fighting and collecting supplies; it increases attack damage over time.
 - **Stamina** fuels attacks and dashes. Insomnia boosts regen/speed; withdrawal slows regen and causes damage ticks.
 - **Psychosis** currently makes movement less stable, raises incoming damage, and adds offensive damage.
+- **Fet-D, food, weapons, and gear** are tracked as survival inventory. The day ends in failure if the player cannot meet that night’s requirements, though generic supplies can cover missing categories.
 - **Supply caches and pressure zones** are spawned at runtime by `scripts/game.gd`, keeping the starting map free of heart/germ placeholders.
 - **Random items** are defined in `scripts/game.gd` in `ITEM_TABLE`, then spawned as `scenes/item_pickup.tscn` instances.
-- **Enemy scaling** happens in `scripts/enemy.gd::setup()`, which increases health, speed, damage, and reward by wave.
+- **Enemy scaling** happens in `scripts/enemy.gd::setup()`, which increases health, speed, damage, and reward by day/night danger level.
 
 ## How to open this in the Godot Web Editor
 
@@ -71,5 +73,6 @@ Because the Web Editor stores files inside the browser, treat GitHub/this repo a
 - Tune attack range, cooldown, dash cost, and enemy speed until the fight feels right.
 - Replace the remaining prototype polygons with sprites and animations.
 - Split item/status definitions into data resources once the list grows.
+- Add explicit inventory choice UI for spending scarce Fet-D, food, weapons, and gear before night.
 - Add ranged enemies, blocking, heavy attacks, and item inventory choices.
 - Add sound effects and camera shake for hit confirmation.
