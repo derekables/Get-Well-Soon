@@ -20,6 +20,7 @@ signal knocked_out
 @onready var attack_shape: CollisionShape2D = $AttackArea/CollisionShape2D
 @onready var body: Polygon2D = $Body
 @onready var attack_arc: Polygon2D = $AttackArea/Arc
+@onready var camera: Camera2D = $Camera2D
 
 var health := max_health
 var stamina := max_stamina
@@ -35,6 +36,7 @@ var _statuses := {}
 var _status_tick_timer := 0.0
 
 func _ready() -> void:
+	camera.make_current()
 	attack_area.body_entered.connect(_on_attack_body_entered)
 	attack_area.monitoring = false
 	attack_shape.disabled = true

@@ -1,20 +1,100 @@
 extends Node2D
 
-const STARTING_SUPPLY_CACHES := 8
-const STARTING_PRESSURE_ZONES := 4
+const STARTING_SUPPLY_CACHES := 18
+const STARTING_PRESSURE_ZONES := 9
+const STARTING_STORY_NODES := 7
 const DAY_DURATION := 50.0
 const NIGHT_DURATION := 65.0
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
-const PLAY_RECT := Rect2(24, 72, 912, 420)
+const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
+const VIEWPORT_RECT := Rect2(24, 72, 912, 420)
 const RESOURCE_TITLES := {
 	"fet_d": "Fet-D",
 	"food": "Food",
 	"weapons": "Weapons",
 	"gear": "Gear",
 }
+
+const BACKGROUNDS := [
+	{
+		"title": "Foster Kid",
+		"description": "You learned to read rooms before you learned to trust them.",
+		"hope": -4,
+		"needs": {"belonging": -12, "safety": -6},
+		"reputation": {"street": 1},
+	},
+	{
+		"title": "Former Athlete",
+		"description": "Your body remembers discipline even when your life does not.",
+		"health": 14,
+		"stamina": 12,
+		"needs": {"purpose": -8},
+	},
+	{
+		"title": "Street Hustler",
+		"description": "You know who buys, who lies, and which doors never open twice.",
+		"grit": 5,
+		"items": {"weapons": 1},
+		"reputation": {"street": 2, "criminal": 1},
+	},
+	{
+		"title": "Musician",
+		"description": "A few songs still make strangers stop and listen.",
+		"hope": 6,
+		"needs": {"purpose": 10, "self_worth": 6},
+		"identity": {"creates_art": 2},
+	},
+]
+
+const TRAITS := [
+	{"title": "Fast Learner", "hope": 2, "identity": {"takes_responsibility": 1}},
+	{"title": "Good Listener", "needs": {"belonging": 5}, "identity": {"builds_relationships": 1}},
+	{"title": "Lucky", "items": {"food": 1}, "hope": 3},
+	{"title": "Addictive Personality", "need_decay": 1.18, "hope": -2},
+	{"title": "Insomnia", "status": "insomnia", "needs": {"sleep": -18}},
+	{"title": "Impulsive", "identity": {"avoids_responsibility": 1}, "reputation": {"criminal": 1}},
+	{"title": "Artist", "identity": {"creates_art": 1}, "needs": {"purpose": 4}},
+]
+
+const STORY_TABLE := [
+	{
+		"title": "Homeless Veteran",
+		"prompt": "A veteran is shaking beside a bus stop. You share time and supplies.",
+		"supplies": -1,
+		"hope": 4,
+		"needs": {"belonging": 8, "self_worth": 8},
+		"reputation": {"community": 2, "recovery": 1},
+		"identity": {"helps_strangers": 2, "builds_relationships": 1},
+	},
+	{
+		"title": "Open Mic Flyer",
+		"prompt": "A torn flyer points to an open mic. You practice until your hands hurt.",
+		"hope": 5,
+		"needs": {"purpose": 12, "self_worth": 5, "sleep": -5},
+		"reputation": {"community": 1},
+		"identity": {"creates_art": 3},
+	},
+	{
+		"title": "Unlocked Delivery Door",
+		"prompt": "Nobody is watching the delivery door. You slip in and grab what you can.",
+		"items": {"food": 1, "gear": 1},
+		"hope": -2,
+		"reputation": {"criminal": 2, "employment": -1},
+		"identity": {"lies": 1, "avoids_responsibility": 1},
+	},
+	{
+		"title": "Recovery Meeting",
+		"prompt": "A meeting is starting in a church basement. You sit in the back and listen.",
+		"hope": 7,
+		"needs": {"belonging": 10, "safety": 5},
+		"reputation": {"recovery": 3, "community": 1},
+		"identity": {"takes_responsibility": 2, "builds_relationships": 1},
+	},
+]
+
 const ITEM_TABLE := [
 	{
 		"kind": "fet_d",
@@ -83,6 +163,7 @@ const ITEM_TABLE := [
 @onready var pressure_zones: Node2D = $PressureZones
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
+@onready var story_nodes: Node2D = $StoryNodes
 
 var supplies := 0
 var day := 1
@@ -101,14 +182,24 @@ var survival_items := {
 var _rng := RandomNumberGenerator.new()
 var _combat_log := ""
 var _last_resource_awarded := ""
+var needs := {}
+var reputation := {}
+var identity := {}
+var hope := 50.0
+var need_decay_multiplier := 1.0
+var background := {}
+var traits: Array = []
+var _need_tick_timer := 0.0
 
 func _ready() -> void:
 	_rng.randomize()
 	start_position = player.position
+	player.play_area = PLAY_RECT
 	player.stats_changed.connect(_on_player_stats_changed)
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
 	player.knocked_out.connect(_on_player_knocked_out)
+	_roll_character()
 	_start_phase("day")
 	_set_log("Day 1 started. Scavenge Fet-D, food, weapons, and gear before night falls.")
 	_update_ui()
@@ -118,6 +209,7 @@ func _process(delta: float) -> void:
 		get_tree().reload_current_scene()
 	if game_over:
 		return
+	_update_needs(delta)
 	phase_time_remaining -= delta
 	if phase_time_remaining <= 0.0:
 		_complete_phase()
@@ -147,6 +239,7 @@ func _on_item_picked_up(item: Area2D, item_data: Dictionary) -> void:
 	if game_over:
 		return
 	player.apply_item(item_data)
+	_apply_item_need_effects(item_data)
 	var resource := item_data.get("resource", "")
 	if resource != "":
 		_add_survival_item(resource, item_data.get("amount", 1))
@@ -171,6 +264,7 @@ func _on_enemy_struck_player(damage: int) -> void:
 	_set_log("Hit for %d during %s. Dash, reposition, counter." % [damage, phase])
 
 func _on_attack_landed(target: Node, damage: int) -> void:
+	_apply_identity_modifiers({"uses_violence": 1})
 	_set_log("Landed a fast hit on %s for %d." % [target.name, damage])
 
 func _on_player_knocked_out() -> void:
@@ -209,6 +303,7 @@ func _start_phase(new_phase: String) -> void:
 	_clear_container(pressure_zones)
 	_clear_container(enemies)
 	_clear_container(items)
+	_clear_container(story_nodes)
 	player.position = start_position
 	player.velocity = Vector2.ZERO
 	if phase == "day":
@@ -216,12 +311,14 @@ func _start_phase(new_phase: String) -> void:
 		_spawn_supply_caches(STARTING_SUPPLY_CACHES + day)
 		_spawn_pressure_zones(STARTING_PRESSURE_ZONES + max(0, day - 1))
 		_spawn_wave(max(1, day - 1))
-		_spawn_loose_items(3 + min(day, 4))
+		_spawn_loose_items(7 + min(day * 2, 10))
+		_spawn_story_nodes(STARTING_STORY_NODES + min(day, 5))
 	else:
 		player.recover_between_phases(8, 25.0)
 		_spawn_pressure_zones(STARTING_PRESSURE_ZONES + day + 2)
 		_spawn_wave(wave)
-		_spawn_loose_items(1 + min(day, 3))
+		_spawn_loose_items(3 + min(day, 5))
+		_spawn_story_nodes(2 + min(day, 4))
 	_update_ui()
 
 func _spawn_wave(level: int) -> void:
@@ -256,6 +353,25 @@ func _spawn_pressure_zones(count: int) -> void:
 		pressure_zones.add_child(zone)
 		zone.triggered.connect(_on_pressure_zone_triggered)
 
+func _spawn_story_nodes(count: int) -> void:
+	for i in range(count):
+		var node := Area2D.new()
+		node.name = "StoryNode%d" % (i + 1)
+		node.global_position = _random_play_position()
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = 28.0
+		shape.shape = circle
+		node.add_child(shape)
+		var marker := Polygon2D.new()
+		marker.color = Color(0.2, 0.52, 1.0, 0.76)
+		marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
+		node.add_child(marker)
+		var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
+		node.set_meta("story_data", story_data)
+		story_nodes.add_child(node)
+		node.body_entered.connect(_on_story_node_entered.bind(node))
+
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
 		_spawn_item(_random_play_position())
@@ -285,6 +401,26 @@ func _random_edge_position() -> Vector2:
 			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.position.y + 20.0)
 		_:
 			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.end.y - 20.0)
+
+func _on_story_node_entered(body: Node, node: Area2D) -> void:
+	if game_over or body != player or not is_instance_valid(node):
+		return
+	var story_data: Dictionary = node.get_meta("story_data", {})
+	_apply_story_node(story_data)
+	node.queue_free()
+
+func _apply_story_node(story_data: Dictionary) -> void:
+	if story_data.is_empty():
+		return
+	supplies = max(0, supplies + int(story_data.get("supplies", 0)))
+	_adjust_hope(float(story_data.get("hope", 0.0)))
+	_apply_need_modifiers(story_data.get("needs", {}))
+	_apply_reputation_modifiers(story_data.get("reputation", {}))
+	_apply_identity_modifiers(story_data.get("identity", {}))
+	for resource in story_data.get("items", {}).keys():
+		_add_survival_item(resource, int(story_data["items"][resource]))
+	_set_log("%s: %s" % [story_data.get("title", "Story"), story_data.get("prompt", "The city remembers.")])
+	_update_ui()
 
 func _award_random_survival_item() -> String:
 	var keys := survival_items.keys()
@@ -364,9 +500,131 @@ func _clear_container(container: Node) -> void:
 	for child in container.get_children():
 		child.queue_free()
 
+func _roll_character() -> void:
+	needs = {"hunger": 82.0, "thirst": 78.0, "sleep": 74.0, "hygiene": 58.0, "warmth": 68.0, "safety": 56.0, "belonging": 42.0, "purpose": 38.0, "self_worth": 44.0}
+	reputation = {"street": 0, "criminal": 0, "recovery": 0, "employment": 0, "community": 0}
+	identity = {"helps_strangers": 0, "lies": 0, "creates_art": 0, "uses_violence": 0, "builds_relationships": 0, "takes_responsibility": 0, "avoids_responsibility": 0}
+	background = BACKGROUNDS[_rng.randi_range(0, BACKGROUNDS.size() - 1)]
+	traits.clear()
+	var pool := TRAITS.duplicate()
+	for i in range(3):
+		var idx := _rng.randi_range(0, pool.size() - 1)
+		traits.append(pool.pop_at(idx))
+	_apply_origin(background)
+	for trait in traits:
+		_apply_origin(trait)
+	player.max_health += int(background.get("health", 0))
+	player.max_stamina += float(background.get("stamina", 0.0))
+	player.health = player.max_health
+	player.stamina = player.max_stamina
+	player.grit += int(background.get("grit", 0))
+
+func _apply_origin(origin: Dictionary) -> void:
+	_adjust_hope(float(origin.get("hope", 0.0)))
+	need_decay_multiplier *= float(origin.get("need_decay", 1.0))
+	_apply_need_modifiers(origin.get("needs", {}))
+	_apply_reputation_modifiers(origin.get("reputation", {}))
+	_apply_identity_modifiers(origin.get("identity", {}))
+	for resource in origin.get("items", {}).keys():
+		_add_survival_item(resource, int(origin["items"][resource]))
+	if origin.has("status"):
+		player.apply_status(origin["status"], 18.0, 1.0)
+
+func _update_needs(delta: float) -> void:
+	_need_tick_timer -= delta
+	var day_pressure := 1.0 + float(day - 1) * 0.08
+	needs["hunger"] = max(0.0, needs["hunger"] - 0.75 * delta * day_pressure * need_decay_multiplier)
+	needs["thirst"] = max(0.0, needs["thirst"] - 0.95 * delta * day_pressure * need_decay_multiplier)
+	needs["sleep"] = max(0.0, needs["sleep"] - (0.44 if phase == "day" else 0.82) * delta * need_decay_multiplier)
+	needs["hygiene"] = max(0.0, needs["hygiene"] - 0.18 * delta * need_decay_multiplier)
+	needs["warmth"] = max(0.0, needs["warmth"] - (0.18 if phase == "day" else 0.52) * delta * day_pressure)
+	needs["safety"] = max(0.0, needs["safety"] - (0.2 if phase == "day" else 0.72) * delta * day_pressure)
+	needs["belonging"] = max(0.0, needs["belonging"] - 0.12 * delta)
+	needs["purpose"] = max(0.0, needs["purpose"] - 0.1 * delta)
+	needs["self_worth"] = max(0.0, needs["self_worth"] - 0.1 * delta)
+	if _need_tick_timer <= 0.0:
+		_need_tick_timer = 4.0
+		_resolve_need_consequences()
+
+func _resolve_need_consequences() -> void:
+	var lowest := 100.0
+	for value in needs.values():
+		lowest = min(lowest, float(value))
+	if lowest < 18.0:
+		player.take_damage(2 + day)
+		_adjust_hope(-2.0)
+	if needs.get("sleep", 100.0) < 24.0:
+		player.apply_status("insomnia", 6.0, 1.0)
+	if needs.get("safety", 100.0) < 20.0:
+		player.apply_status("psychosis", 5.0, 1.0)
+	if needs.get("purpose", 100.0) < 18.0 or needs.get("self_worth", 100.0) < 18.0:
+		_adjust_hope(-1.0)
+
+func _apply_item_need_effects(item_data: Dictionary) -> void:
+	match item_data.get("kind", "scrap"):
+		"food":
+			_apply_need_modifiers({"hunger": 24, "thirst": 8})
+		"coffee":
+			_apply_need_modifiers({"thirst": 6, "sleep": -8})
+		"gear":
+			_apply_need_modifiers({"warmth": 18, "safety": 6})
+		"fet_d", "street_meds":
+			_apply_need_modifiers({"safety": 4})
+		_:
+			_apply_need_modifiers({"purpose": 2})
+
+func _apply_need_modifiers(modifiers: Dictionary) -> void:
+	for key in modifiers.keys():
+		if needs.has(key):
+			needs[key] = clamp(float(needs[key]) + float(modifiers[key]), 0.0, 100.0)
+
+func _apply_reputation_modifiers(modifiers: Dictionary) -> void:
+	for key in modifiers.keys():
+		if reputation.has(key):
+			reputation[key] += int(modifiers[key])
+
+func _apply_identity_modifiers(modifiers: Dictionary) -> void:
+	for key in modifiers.keys():
+		if identity.has(key):
+			identity[key] += int(modifiers[key])
+
+func _adjust_hope(amount: float) -> void:
+	hope = clamp(hope + amount, 0.0, 100.0)
+
 func _format_timer() -> String:
 	var seconds := int(ceil(max(0.0, phase_time_remaining)))
 	return "%02d:%02d" % [int(seconds / 60), seconds % 60]
+
+func _needs_text() -> String:
+	return "Needs H:%d T:%d Sl:%d Hy:%d W:%d Safe:%d Bel:%d Pur:%d Worth:%d Hope:%s" % [
+		int(needs.get("hunger", 0)), int(needs.get("thirst", 0)), int(needs.get("sleep", 0)),
+		int(needs.get("hygiene", 0)), int(needs.get("warmth", 0)), int(needs.get("safety", 0)),
+		int(needs.get("belonging", 0)), int(needs.get("purpose", 0)), int(needs.get("self_worth", 0)), _hope_trend(),
+	]
+
+func _hope_trend() -> String:
+	if hope >= 70.0:
+		return "rising"
+	if hope >= 40.0:
+		return "fragile"
+	if hope >= 18.0:
+		return "fading"
+	return "dangerously low"
+
+func _identity_text() -> String:
+	var strongest := "undefined"
+	var amount := -999
+	for key in identity.keys():
+		if int(identity[key]) > amount:
+			amount = int(identity[key])
+			strongest = str(key).replace("_", " ")
+	var trait_titles: Array[String] = []
+	for trait in traits:
+		trait_titles.append(trait.get("title", "Trait"))
+	return "Background: %s | Traits: %s | Identity: %s | Rep S/C/R/E/Com: %d/%d/%d/%d/%d" % [
+		background.get("title", "Unknown"), ", ".join(trait_titles), strongest,
+		reputation["street"], reputation["criminal"], reputation["recovery"], reputation["employment"], reputation["community"],
+	]
 
 func _requirements_text() -> String:
 	var requirements := _resource_requirement()
@@ -399,10 +657,10 @@ func _update_ui() -> void:
 		_update_score_label()
 		return
 	if phase == "day":
-		message_label.text = "Day %d: collect enough for tonight — %s" % [day, _requirements_text()]
+		message_label.text = "Day %d: %s\n%s" % [day, _requirements_text(), _needs_text()]
 	else:
-		message_label.text = "Night %d: survive until dawn. Inventory left: %s" % [day, _inventory_text()]
-	restart_label.text = "Move: WASD/Arrows   Attack: Space/J   Dash: Shift/K   Restart: R"
+		message_label.text = "Night %d: survive until dawn. %s\n%s" % [day, _inventory_text(), _needs_text()]
+	restart_label.text = _identity_text() + "\nMove: WASD/Arrows   Interact/Attack: Space/J   Dash: Shift/K   Restart: R"
 	_update_score_label()
 	if combat_log_label != null:
 		combat_log_label.text = "Log: " + _combat_log
