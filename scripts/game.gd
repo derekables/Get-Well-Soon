@@ -59,6 +59,49 @@ const TRAITS := [
 	{"title": "Artist", "identity": {"creates_art": 1}, "needs": {"purpose": 4}},
 ]
 
+const IDENTITY_TITLE_RULES := [
+	{
+		"title": "The Shepherd",
+		"quote": "Everybody knows who you are. You're the Shepherd.",
+		"weights": {"helps_strangers": 3, "builds_relationships": 2, "takes_responsibility": 1},
+	},
+	{
+		"title": "The Provider",
+		"quote": "People say you always find a way to keep others fed. The Provider, that's you.",
+		"weights": {"shares_resources": 4, "helps_strangers": 2, "takes_responsibility": 1},
+	},
+	{
+		"title": "The Dreamer",
+		"quote": "Even out here, you're still chasing songs and impossible mornings. The Dreamer fits.",
+		"weights": {"creates_art": 4, "purpose_kept": 1},
+	},
+	{
+		"title": "The Wolf",
+		"quote": "Folks step aside when you come through. They call you the Wolf now.",
+		"weights": {"uses_violence": 4},
+	},
+	{
+		"title": "The Ghost",
+		"quote": "Nobody can pin you down. You're a ghost when things get close.",
+		"weights": {"avoids_responsibility": 2, "survives_alone": 3},
+	},
+	{
+		"title": "The Hustler",
+		"quote": "Every block knows you can turn nothing into something. The Hustler, right?",
+		"weights": {"chases_resources": 2, "lies": 2, "avoids_responsibility": 1},
+	},
+	{
+		"title": "The Chameleon",
+		"quote": "Recovery folks, street crews, businesses — you blend anywhere. Chameleon suits you.",
+		"weights": {"changes_factions": 4, "builds_relationships": 1},
+	},
+	{
+		"title": "The Survivor",
+		"quote": "You keep getting through without becoming just one thing. That's a Survivor.",
+		"weights": {"survival_days": 3, "takes_responsibility": 1, "chases_resources": 1},
+	},
+]
+
 const STORY_TABLE := [
 	{
 		"title": "Homeless Veteran",
@@ -67,7 +110,7 @@ const STORY_TABLE := [
 		"hope": 4,
 		"needs": {"belonging": 8, "self_worth": 8},
 		"reputation": {"community": 2, "recovery": 1},
-		"identity": {"helps_strangers": 2, "builds_relationships": 1},
+		"identity": {"helps_strangers": 2, "builds_relationships": 1, "shares_resources": 2},
 	},
 	{
 		"title": "Open Mic Flyer",
@@ -75,7 +118,7 @@ const STORY_TABLE := [
 		"hope": 5,
 		"needs": {"purpose": 12, "self_worth": 5, "sleep": -5},
 		"reputation": {"community": 1},
-		"identity": {"creates_art": 3},
+		"identity": {"creates_art": 3, "purpose_kept": 1},
 	},
 	{
 		"title": "Unlocked Delivery Door",
@@ -83,7 +126,7 @@ const STORY_TABLE := [
 		"items": {"food": 1, "gear": 1},
 		"hope": -2,
 		"reputation": {"criminal": 2, "employment": -1},
-		"identity": {"lies": 1, "avoids_responsibility": 1},
+		"identity": {"lies": 1, "avoids_responsibility": 1, "chases_resources": 2},
 	},
 	{
 		"title": "Recovery Meeting",
@@ -91,7 +134,7 @@ const STORY_TABLE := [
 		"hope": 7,
 		"needs": {"belonging": 10, "safety": 5},
 		"reputation": {"recovery": 3, "community": 1},
-		"identity": {"takes_responsibility": 2, "builds_relationships": 1},
+		"identity": {"takes_responsibility": 2, "builds_relationships": 1, "changes_factions": 1},
 	},
 ]
 
@@ -185,6 +228,9 @@ var _last_resource_awarded := ""
 var needs := {}
 var reputation := {}
 var identity := {}
+var current_identity_title := ""
+var identity_title_revealed := false
+var _pending_identity_quote := ""
 var hope := 50.0
 var need_decay_multiplier := 1.0
 var background := {}
@@ -220,6 +266,7 @@ func _on_supply_collected(cache: Area2D) -> void:
 		return
 	supplies += 1
 	player.add_supply(1)
+	_apply_identity_modifiers({"chases_resources": 1})
 	cache.queue_free()
 	var resource := _award_random_survival_item()
 	_set_log("Found a cache: +1 %s plus grit and stamina." % RESOURCE_TITLES.get(resource, resource.capitalize()))
@@ -292,6 +339,7 @@ func _complete_phase() -> void:
 	else:
 		survived_nights += 1
 		day += 1
+		_apply_identity_modifiers({"survival_days": 1})
 		_start_phase("day")
 		_set_log("Dawn broke. You survived %d night(s); requirements and danger increased." % survived_nights)
 
@@ -503,7 +551,7 @@ func _clear_container(container: Node) -> void:
 func _roll_character() -> void:
 	needs = {"hunger": 82.0, "thirst": 78.0, "sleep": 74.0, "hygiene": 58.0, "warmth": 68.0, "safety": 56.0, "belonging": 42.0, "purpose": 38.0, "self_worth": 44.0}
 	reputation = {"street": 0, "criminal": 0, "recovery": 0, "employment": 0, "community": 0}
-	identity = {"helps_strangers": 0, "lies": 0, "creates_art": 0, "uses_violence": 0, "builds_relationships": 0, "takes_responsibility": 0, "avoids_responsibility": 0}
+	identity = {"helps_strangers": 0, "lies": 0, "creates_art": 0, "uses_violence": 0, "builds_relationships": 0, "takes_responsibility": 0, "avoids_responsibility": 0, "shares_resources": 0, "chases_resources": 0, "changes_factions": 0, "survives_alone": 0, "survival_days": 0, "purpose_kept": 0}
 	background = BACKGROUNDS[_rng.randi_range(0, BACKGROUNDS.size() - 1)]
 	traits.clear()
 	var pool := TRAITS.duplicate()
@@ -559,6 +607,10 @@ func _resolve_need_consequences() -> void:
 		player.apply_status("psychosis", 5.0, 1.0)
 	if needs.get("purpose", 100.0) < 18.0 or needs.get("self_worth", 100.0) < 18.0:
 		_adjust_hope(-1.0)
+	if needs.get("belonging", 100.0) < 20.0:
+		_apply_identity_modifiers({"survives_alone": 1})
+	if needs.get("purpose", 0.0) > 70.0:
+		_apply_identity_modifiers({"purpose_kept": 1})
 
 func _apply_item_need_effects(item_data: Dictionary) -> void:
 	match item_data.get("kind", "scrap"):
@@ -587,6 +639,34 @@ func _apply_identity_modifiers(modifiers: Dictionary) -> void:
 	for key in modifiers.keys():
 		if identity.has(key):
 			identity[key] += int(modifiers[key])
+	_update_identity_title()
+
+func _update_identity_title() -> void:
+	var best_title := ""
+	var best_quote := ""
+	var best_score := 0
+	for rule in IDENTITY_TITLE_RULES:
+		var score := 0
+		for key in rule.get("weights", {}).keys():
+			score += int(identity.get(key, 0)) * int(rule["weights"][key])
+		if score > best_score:
+			best_score = score
+			best_title = rule.get("title", "")
+			best_quote = rule.get("quote", "")
+	current_identity_title = best_title
+	if not identity_title_revealed and best_score >= 10 and best_quote != "":
+		identity_title_revealed = true
+		_pending_identity_quote = best_quote
+
+func _identity_title_score() -> int:
+	var best_score := 0
+	for rule in IDENTITY_TITLE_RULES:
+		var score := 0
+		for key in rule.get("weights", {}).keys():
+			score += int(identity.get(key, 0)) * int(rule["weights"][key])
+		best_score = max(best_score, score)
+	return best_score
+
 
 func _adjust_hope(amount: float) -> void:
 	hope = clamp(hope + amount, 0.0, 100.0)
@@ -612,19 +692,19 @@ func _hope_trend() -> String:
 	return "dangerously low"
 
 func _identity_text() -> String:
-	var strongest := "undefined"
-	var amount := -999
-	for key in identity.keys():
-		if int(identity[key]) > amount:
-			amount = int(identity[key])
-			strongest = str(key).replace("_", " ")
 	var trait_titles: Array[String] = []
 	for trait in traits:
 		trait_titles.append(trait.get("title", "Trait"))
-	return "Background: %s | Traits: %s | Identity: %s | Rep S/C/R/E/Com: %d/%d/%d/%d/%d" % [
-		background.get("title", "Unknown"), ", ".join(trait_titles), strongest,
+	var whisper := "Nobody has named what you're becoming yet."
+	if identity_title_revealed:
+		whisper = "People are starting to call you %s." % current_identity_title
+	elif _identity_title_score() >= 6:
+		whisper = "People are starting to recognize a pattern in you."
+	return "Background: %s | Traits: %s | Rumor: %s | Rep S/C/R/E/Com: %d/%d/%d/%d/%d" % [
+		background.get("title", "Unknown"), ", ".join(trait_titles), whisper,
 		reputation["street"], reputation["criminal"], reputation["recovery"], reputation["employment"], reputation["community"],
 	]
+
 
 func _requirements_text() -> String:
 	var requirements := _resource_requirement()
@@ -643,6 +723,9 @@ func _inventory_text() -> String:
 	]
 
 func _set_log(text: String) -> void:
+	if _pending_identity_quote != "" and text != _pending_identity_quote:
+		text = "%s / %s" % [text, _pending_identity_quote]
+		_pending_identity_quote = ""
 	_combat_log = text
 	if combat_log_label != null:
 		combat_log_label.text = "Log: " + _combat_log

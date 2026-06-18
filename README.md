@@ -74,18 +74,18 @@ Needs decay over time, and low needs can damage health, stamina, grit, hope, and
 
 ### Reputation and identity
 
-Separate reputation tracks now exist for street, criminal, recovery, employment, and community standing. Hidden identity tracks record repeated behavior: helping strangers, lying, creating art, using violence, building relationships, taking responsibility, and avoiding responsibility.
+Separate reputation tracks now exist for street, criminal, recovery, employment, and community standing. Hidden identity tracks record repeated behavior: helping strangers, lying, creating art, using violence, building relationships, taking responsibility, avoiding responsibility, sharing resources, chasing resources, changing factions, surviving alone, surviving days, and keeping purpose alive.
 
 ### Story nodes
 
-The first interactive story nodes are in place as simple blue markers. They are not final quest content; they prove the loop for environmental narrative choices that can alter resources, needs, reputation, hope, and identity.
+The first interactive story nodes are in place as simple blue markers. They are not final quest content; they prove the loop for environmental narrative choices that can alter resources, needs, reputation, hope, and identity. The game now derives hidden identity titles such as The Shepherd, The Provider, The Dreamer, The Wolf, The Ghost, The Hustler, The Chameleon, and The Survivor from repeated behavior; the UI only exposes this as a rumor once the city starts recognizing a pattern.
 
 ## Near-term roadmap
 
 - Replace prototype polygons and markers with sprites, animations, portraits, and more readable environmental art.
 - Split background, trait, item, need, reputation, and story-node definitions into data resources once the lists grow.
 - Add explicit choice UI so story nodes can present multiple options instead of one default interaction.
-- Add NPC memory records for promises, betrayals, gifts, favors, conversations, and rumors.
+- Add NPC memory records for promises, betrayals, gifts, favors, conversations, rumors, and behavior-derived identity titles.
 - Add shelters, clinics, local businesses, recovery meetings, criminal contacts, and street-family hubs.
 - Turn hard failure states into story branches such as jail, hospital, shelter intake, debt, or rescue.
 - Add legacy persistence so future characters can encounter consequences of previous runs.
