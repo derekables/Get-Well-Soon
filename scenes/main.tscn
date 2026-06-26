@@ -124,6 +124,12 @@ layout_mode = 2
 text = "Objective: gather today's essentials before nightfall."
 autowrap_mode = 3
 
+[node name="InteractionPromptLabel" type="Label" parent="UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin"]
+visible = false
+layout_mode = 2
+text = "Space/J: Interact"
+horizontal_alignment = 1
+
 [node name="LogPanel" type="PanelContainer" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
 
@@ -141,5 +147,5 @@ autowrap_mode = 3
 
 [node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Move: WASD/Arrows   Attack: Space/J   Dash: Shift/K   Restart: R"
+text = "Move: WASD/Arrows   Interact/Attack: Space/J   Dash: Shift/K   Restart: R"
 autowrap_mode = 3

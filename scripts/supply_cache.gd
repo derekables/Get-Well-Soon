@@ -2,9 +2,8 @@ extends Area2D
 
 signal collected(cache: Area2D)
 
-func _ready() -> void:
-	body_entered.connect(_on_body_entered)
+func get_interaction_label() -> String:
+	return "Search Supply Cache"
 
-func _on_body_entered(body: Node2D) -> void:
-	if body.name == "Player":
-		collected.emit(self)
+func interact(_game: Node) -> void:
+	collected.emit(self)

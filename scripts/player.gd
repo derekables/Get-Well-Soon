@@ -3,6 +3,8 @@ extends CharacterBody2D
 signal stats_changed(stats: Dictionary)
 signal status_changed(status_text: String)
 signal attack_landed(target: Node, damage: int)
+signal interaction_changed(label: String)
+signal interaction_requested(target: Node)
 signal knocked_out
 
 @export var base_speed := 285.0
@@ -17,6 +19,7 @@ signal knocked_out
 @export var dash_time := 0.11
 
 @onready var attack_area: Area2D = $AttackArea
+@onready var interaction_area: Area2D = $InteractionArea
 @onready var attack_shape: CollisionShape2D = $AttackArea/CollisionShape2D
 @onready var body: Polygon2D = $Body
 @onready var attack_arc: Polygon2D = $AttackArea/Arc
@@ -32,12 +35,16 @@ var _attack_active_timer := 0.0
 var _dash_timer := 0.0
 var _invulnerable_timer := 0.0
 var _hit_targets: Array[Node] = []
+var _nearby_interactables: Array[Node] = []
+var _nearest_interactable: Node = null
 var _statuses := {}
 var _status_tick_timer := 0.0
 
 func _ready() -> void:
 	camera.make_current()
 	attack_area.body_entered.connect(_on_attack_body_entered)
+	interaction_area.area_entered.connect(_on_interaction_area_entered)
+	interaction_area.area_exited.connect(_on_interaction_area_exited)
 	attack_area.monitoring = false
 	attack_shape.disabled = true
 	attack_arc.visible = false
@@ -63,6 +70,9 @@ func reset_to(start_position: Vector2) -> void:
 	_attack_active_timer = 0.0
 	_dash_timer = 0.0
 	_invulnerable_timer = 0.0
+	_hit_targets.clear()
+	_nearby_interactables.clear()
+	_set_nearest_interactable(null)
 	attack_area.monitoring = false
 	attack_shape.disabled = true
 	attack_arc.visible = false
@@ -154,8 +164,12 @@ func get_attack_damage() -> int:
 	return max(1, damage)
 
 func _handle_actions() -> void:
+	_update_nearest_interactable()
 	if Input.is_action_just_pressed("attack"):
-		_try_attack()
+		if _nearest_interactable != null:
+			interaction_requested.emit(_nearest_interactable)
+		else:
+			_try_attack()
 	if Input.is_action_just_pressed("dash"):
 		_try_dash()
 
@@ -174,6 +188,53 @@ func _move_player(delta: float) -> void:
 	position = position.clamp(play_area.position, play_area.position + play_area.size)
 	if _attack_active_timer <= 0.0:
 		_update_attack_area_transform()
+
+func clear_interactable(target: Node) -> void:
+	_nearby_interactables.erase(target)
+	if _nearest_interactable == target:
+		_set_nearest_interactable(null)
+	_update_nearest_interactable()
+
+func _on_interaction_area_entered(area: Area2D) -> void:
+	if _is_interactable(area) and not _nearby_interactables.has(area):
+		_nearby_interactables.append(area)
+		_update_nearest_interactable()
+
+func _on_interaction_area_exited(area: Area2D) -> void:
+	_nearby_interactables.erase(area)
+	if _nearest_interactable == area:
+		_set_nearest_interactable(null)
+	_update_nearest_interactable()
+
+func _update_nearest_interactable() -> void:
+	var best: Node = null
+	var best_distance := INF
+	for candidate in _nearby_interactables.duplicate():
+		if not is_instance_valid(candidate) or not _is_interactable(candidate):
+			_nearby_interactables.erase(candidate)
+			continue
+		var distance := global_position.distance_squared_to(candidate.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = candidate
+	_set_nearest_interactable(best)
+
+func _set_nearest_interactable(target: Node) -> void:
+	if _nearest_interactable == target:
+		return
+	_nearest_interactable = target
+	var label := ""
+	if _nearest_interactable != null:
+		label = _interaction_label(_nearest_interactable)
+	interaction_changed.emit(label)
+
+func _is_interactable(node: Node) -> bool:
+	return node != null and (node.has_method("interact") or node.has_meta("interaction_label"))
+
+func _interaction_label(node: Node) -> String:
+	if node.has_method("get_interaction_label"):
+		return str(node.get_interaction_label())
+	return str(node.get_meta("interaction_label", "Interact"))
 
 func _try_attack() -> void:
 	if _attack_timer > 0.0 or stamina < 10.0 or health <= 0:
