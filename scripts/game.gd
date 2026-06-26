@@ -9,6 +9,7 @@ const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
+const STORY_NODE_SCRIPT := preload("res://scripts/story_node.gd")
 const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
 const SHOP_INTERIOR_RECT := Rect2(3000 - 284, -184, 568, 368)
 const AREA_OUTDOOR := "outdoor_block"
@@ -203,6 +204,7 @@ const ITEM_TABLE := [
 @onready var score_label: Label = $UI/MarginContainer/VBoxContainer/TopBar/TopBarMargin/ScoreLabel
 @onready var status_label: Label = $UI/MarginContainer/VBoxContainer/StatusPanel/StatusMargin/StatusVBox/StatusLabel
 @onready var message_label: Label = $UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin/MessageLabel
+@onready var interaction_prompt_label: Label = $UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin/InteractionPromptLabel
 @onready var restart_label: Label = $UI/MarginContainer/VBoxContainer/RestartLabel
 @onready var combat_log_label: Label = $UI/MarginContainer/VBoxContainer/LogPanel/LogMargin/CombatLogLabel
 @onready var supply_caches: Node2D = $Supplies
@@ -260,10 +262,13 @@ func _ready() -> void:
 	player.stats_changed.connect(_on_player_stats_changed)
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
+	player.interaction_changed.connect(_on_player_interaction_changed)
+	player.interaction_requested.connect(_on_player_interaction_requested)
 	player.knocked_out.connect(_on_player_knocked_out)
 	_roll_character()
 	_start_phase("day")
 	_set_log("Day 1 started. Scavenge Fet-D, food, weapons, and gear before night falls.")
+	_spawn_shop_doors()
 	_update_ui()
 
 func _process(delta: float) -> void:
@@ -278,8 +283,9 @@ func _process(delta: float) -> void:
 	_update_ui()
 
 func _on_supply_collected(cache: Area2D) -> void:
-	if game_over:
+	if game_over or not is_instance_valid(cache):
 		return
+	player.clear_interactable(cache)
 	supplies += 1
 	player.add_supply(1)
 	_apply_identity_modifiers({"chases_resources": 1})
@@ -440,6 +446,44 @@ func _spawn_wave(level: int) -> void:
 		enemy.struck_player.connect(_on_enemy_struck_player)
 	_set_log("%s %d danger level %d: %d threats on the block." % [phase.capitalize(), day, level, count])
 
+func _spawn_shop_doors() -> void:
+	var door := Area2D.new()
+	door.name = "CornerStoreDoor"
+	door.global_position = Vector2(-1070, -710)
+	door.set_script(preload("res://scripts/interaction_marker.gd"))
+	door.set("interaction_label", "Enter Corner Store")
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(82, 46)
+	shape.shape = rect
+	door.add_child(shape)
+	var marker := Polygon2D.new()
+	marker.color = Color(0.55, 0.38, 0.18, 0.86)
+	marker.polygon = PackedVector2Array(Vector2(-40, -22), Vector2(40, -22), Vector2(40, 22), Vector2(-40, 22))
+	door.add_child(marker)
+	add_child(door)
+	door.connect("interacted", _on_shop_door_interacted)
+
+func _on_shop_door_interacted(door: Area2D) -> void:
+	if game_over:
+		return
+	_set_log("Corner Store: you duck inside, trade news, and find a little shelter.")
+	_apply_need_modifiers({"safety": 8, "warmth": 6, "belonging": 3})
+	_adjust_hope(1.0)
+	_update_ui()
+
+func _on_player_interaction_changed(label: String) -> void:
+	if interaction_prompt_label == null:
+		return
+	interaction_prompt_label.visible = label != ""
+	interaction_prompt_label.text = "Space/J: %s" % label if label != "" else ""
+
+func _on_player_interaction_requested(target: Node) -> void:
+	if game_over or not is_instance_valid(target):
+		return
+	if target.has_method("interact"):
+		target.call("interact", self)
+
 func _spawn_supply_caches(count: int) -> void:
 	for i in range(count):
 		var cache := SUPPLY_CACHE_SCENE.instantiate()
@@ -460,6 +504,7 @@ func _spawn_story_nodes(count: int) -> void:
 	for i in range(count):
 		var node := Area2D.new()
 		node.name = "StoryNode%d" % (i + 1)
+		node.set_script(STORY_NODE_SCRIPT)
 		node.global_position = _random_play_position()
 		var shape := CollisionShape2D.new()
 		var circle := CircleShape2D.new()
@@ -471,9 +516,8 @@ func _spawn_story_nodes(count: int) -> void:
 		marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
 		node.add_child(marker)
 		var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
-		node.set_meta("story_data", story_data)
+		node.call("configure", story_data)
 		story_nodes.add_child(node)
-		node.body_entered.connect(_on_story_node_entered.bind(node))
 
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
@@ -505,9 +549,10 @@ func _random_edge_position() -> Vector2:
 		_:
 			return Vector2(_rng.randf_range(active_bounds.position.x, active_bounds.end.x), active_bounds.end.y - 20.0)
 
-func _on_story_node_entered(body: Node, node: Area2D) -> void:
-	if game_over or body != player or not is_instance_valid(node):
+func resolve_story_node(node: Area2D) -> void:
+	if game_over or not is_instance_valid(node):
 		return
+	player.clear_interactable(node)
 	var story_data: Dictionary = node.get_meta("story_data", {})
 	_apply_story_node(story_data)
 	node.queue_free()
