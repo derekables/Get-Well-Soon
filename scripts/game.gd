@@ -439,7 +439,7 @@ func _spawn_wave(level: int) -> void:
 	for i in range(count):
 		var enemy := ENEMY_SCENE.instantiate()
 		enemy.name = "%sThreat%d_%d" % [phase.capitalize(), level, i + 1]
-		enemy.global_position = _random_edge_position()
+		enemy.global_position = _safe_random_edge_position()
 		enemies.add_child(enemy)
 		enemy.setup(player, level)
 		enemy.defeated.connect(_on_enemy_defeated)
@@ -488,7 +488,7 @@ func _spawn_supply_caches(count: int) -> void:
 	for i in range(count):
 		var cache := SUPPLY_CACHE_SCENE.instantiate()
 		cache.name = "SupplyCache%d" % (i + 1)
-		cache.global_position = _random_play_position()
+		cache.global_position = _safe_random_play_position()
 		supply_caches.add_child(cache)
 		cache.collected.connect(_on_supply_collected)
 
@@ -496,7 +496,7 @@ func _spawn_pressure_zones(count: int) -> void:
 	for i in range(count):
 		var zone := PRESSURE_ZONE_SCENE.instantiate()
 		zone.name = "%sPressureZone%d" % [phase.capitalize(), i + 1]
-		zone.global_position = _random_play_position()
+		zone.global_position = _safe_random_play_position()
 		pressure_zones.add_child(zone)
 		zone.triggered.connect(_on_pressure_zone_triggered)
 
@@ -521,7 +521,7 @@ func _spawn_story_nodes(count: int) -> void:
 
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
-		_spawn_item(_random_play_position())
+		_spawn_item(_authored_or_random_position(AUTHORED_ITEM_POSITIONS, i))
 
 func _spawn_item(spawn_position: Vector2) -> void:
 	var item := ITEM_SCENE.instantiate()
@@ -531,11 +531,46 @@ func _spawn_item(spawn_position: Vector2) -> void:
 	item.configure(item_data)
 	item.picked_up.connect(_on_item_picked_up)
 
+func _authored_or_random_position(authored_positions: Array, index: int) -> Vector2:
+		return authored_positions[index]
+	return _safe_random_play_position()
+
+func _safe_position(spawn_position: Vector2) -> Vector2:
+	var safe_position := spawn_position.clamp(PLAY_RECT.position, PLAY_RECT.position + PLAY_RECT.size)
+	if _is_spawn_blocked(safe_position):
+		return _safe_random_play_position()
+	if index < authored_positions.size():
+	return safe_position
+
+func _safe_random_play_position() -> Vector2:
+	for attempt in range(36):
+		var candidate := _random_play_position()
+		if not _is_spawn_blocked(candidate):
+			return candidate
+	return _random_play_position()
+
 func _random_play_position() -> Vector2:
 	return Vector2(
 		_rng.randf_range(active_bounds.position.x + 44.0, active_bounds.end.x - 44.0),
 		_rng.randf_range(active_bounds.position.y + 44.0, active_bounds.end.y - 44.0)
 	)
+
+func _safe_random_edge_position() -> Vector2:
+	for attempt in range(24):
+		var candidate := _random_edge_position()
+		if not _is_spawn_blocked(candidate):
+			return candidate
+	return _random_edge_position()
+
+func _is_spawn_blocked(candidate: Vector2) -> bool:
+	for blocker in LANDMARK_BLOCKERS:
+		var padded_blocker: Rect2 = blocker.grow(LANDMARK_SPAWN_PADDING)
+		if padded_blocker.has_point(candidate):
+			return true
+	for exit_point in EXIT_CLEAR_POINTS:
+		if candidate.distance_to(exit_point) < 96.0:
+			return true
+	return false
 
 func _random_edge_position() -> Vector2:
 	var side := _rng.randi_range(0, 3)
