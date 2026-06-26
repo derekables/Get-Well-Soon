@@ -10,6 +10,9 @@ const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
 const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
+const SHOP_INTERIOR_RECT := Rect2(3000 - 284, -184, 568, 368)
+const AREA_OUTDOOR := "outdoor_block"
+const AREA_SHOP := "shop_interior"
 const VIEWPORT_RECT := Rect2(24, 72, 912, 420)
 const RESOURCE_TITLES := {
 	"fet_d": "Fet-D",
@@ -207,6 +210,9 @@ const ITEM_TABLE := [
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
 @onready var story_nodes: Node2D = $StoryNodes
+@onready var shop_interior: Node2D = $ShopInterior
+@onready var shop_entrance: Area2D = $ShopEntrance
+@onready var shop_door_outside_spawn: Marker2D = $ShopDoorOutsideSpawn
 
 var supplies := 0
 var day := 1
@@ -215,6 +221,9 @@ var phase := "day"
 var phase_time_remaining := DAY_DURATION
 var wave := 1
 var start_position := Vector2.ZERO
+var current_area_name := AREA_OUTDOOR
+var active_bounds := PLAY_RECT
+var area_spawn_points := {}
 var game_over := false
 var survival_items := {
 	"fet_d": 0,
@@ -240,7 +249,13 @@ var _need_tick_timer := 0.0
 func _ready() -> void:
 	_rng.randomize()
 	start_position = player.position
-	player.play_area = PLAY_RECT
+	area_spawn_points = {
+		"default": start_position,
+		"shop_spawn": shop_interior.global_position + shop_interior.get_node("ShopSpawn").position,
+		"shop_door_outside": shop_door_outside_spawn.global_position,
+	}
+	_set_active_area(AREA_OUTDOOR, start_position, false, "")
+	_connect_area_exits()
 	player.stats_changed.connect(_on_player_stats_changed)
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
@@ -344,6 +359,7 @@ func _complete_phase() -> void:
 		_set_log("Dawn broke. You survived %d night(s); requirements and danger increased." % survived_nights)
 
 func _start_phase(new_phase: String) -> void:
+	_set_active_area(AREA_OUTDOOR, start_position, false, "")
 	phase = new_phase
 	phase_time_remaining = DAY_DURATION if phase == "day" else NIGHT_DURATION
 	wave = day if phase == "day" else day + survived_nights + 1
@@ -354,6 +370,7 @@ func _start_phase(new_phase: String) -> void:
 	_clear_container(story_nodes)
 	player.position = start_position
 	player.velocity = Vector2.ZERO
+	player.play_area = active_bounds
 	if phase == "day":
 		player.recover_between_phases(18 + day * 2, 55.0)
 		_spawn_supply_caches(STARTING_SUPPLY_CACHES + day)
@@ -368,6 +385,43 @@ func _start_phase(new_phase: String) -> void:
 		_spawn_loose_items(3 + min(day, 5))
 		_spawn_story_nodes(2 + min(day, 4))
 	_update_ui()
+
+func _connect_area_exits() -> void:
+	for node in get_tree().get_nodes_in_group("area_exit"):
+		if node.has_signal("transition_requested"):
+			node.transition_requested.connect(_on_area_transition_requested)
+
+func _on_area_transition_requested(exit: Area2D) -> void:
+	if game_over or exit.get("source_area") != current_area_name:
+		return
+	var spawn_name := str(exit.get("target_spawn"))
+	var spawn_position: Vector2 = area_spawn_points.get(spawn_name, start_position)
+	_set_active_area(str(exit.get("target_area")), spawn_position, true, str(exit.get("display_name")))
+
+func _set_active_area(area_name: String, spawn_position: Vector2, clear_outdoor_entities: bool, title: String) -> void:
+	current_area_name = area_name
+	active_bounds = SHOP_INTERIOR_RECT if current_area_name == AREA_SHOP else PLAY_RECT
+	shop_interior.visible = current_area_name == AREA_SHOP
+	player.play_area = active_bounds
+	player.position = spawn_position.clamp(active_bounds.position, active_bounds.position + active_bounds.size)
+	player.velocity = Vector2.ZERO
+	if player.camera != null:
+		player.camera.limit_left = int(active_bounds.position.x)
+		player.camera.limit_top = int(active_bounds.position.y)
+		player.camera.limit_right = int(active_bounds.end.x)
+		player.camera.limit_bottom = int(active_bounds.end.y)
+	if clear_outdoor_entities and current_area_name == AREA_SHOP:
+		_clear_outdoor_procedural_entities()
+	if title != "":
+		_set_log(title)
+		message_label.text = title
+
+func _clear_outdoor_procedural_entities() -> void:
+	_clear_container(supply_caches)
+	_clear_container(pressure_zones)
+	_clear_container(enemies)
+	_clear_container(items)
+	_clear_container(story_nodes)
 
 func _spawn_wave(level: int) -> void:
 	var count := 0
@@ -427,28 +481,28 @@ func _spawn_loose_items(count: int) -> void:
 func _spawn_item(spawn_position: Vector2) -> void:
 	var item := ITEM_SCENE.instantiate()
 	var item_data: Dictionary = ITEM_TABLE[_rng.randi_range(0, ITEM_TABLE.size() - 1)]
-	item.global_position = spawn_position.clamp(PLAY_RECT.position, PLAY_RECT.position + PLAY_RECT.size)
+	item.global_position = spawn_position.clamp(active_bounds.position, active_bounds.position + active_bounds.size)
 	items.add_child(item)
 	item.configure(item_data)
 	item.picked_up.connect(_on_item_picked_up)
 
 func _random_play_position() -> Vector2:
 	return Vector2(
-		_rng.randf_range(PLAY_RECT.position.x + 44.0, PLAY_RECT.end.x - 44.0),
-		_rng.randf_range(PLAY_RECT.position.y + 44.0, PLAY_RECT.end.y - 44.0)
+		_rng.randf_range(active_bounds.position.x + 44.0, active_bounds.end.x - 44.0),
+		_rng.randf_range(active_bounds.position.y + 44.0, active_bounds.end.y - 44.0)
 	)
 
 func _random_edge_position() -> Vector2:
 	var side := _rng.randi_range(0, 3)
 	match side:
 		0:
-			return Vector2(PLAY_RECT.position.x + 20.0, _rng.randf_range(PLAY_RECT.position.y, PLAY_RECT.end.y))
+			return Vector2(active_bounds.position.x + 20.0, _rng.randf_range(active_bounds.position.y, active_bounds.end.y))
 		1:
-			return Vector2(PLAY_RECT.end.x - 20.0, _rng.randf_range(PLAY_RECT.position.y, PLAY_RECT.end.y))
+			return Vector2(active_bounds.end.x - 20.0, _rng.randf_range(active_bounds.position.y, active_bounds.end.y))
 		2:
-			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.position.y + 20.0)
+			return Vector2(_rng.randf_range(active_bounds.position.x, active_bounds.end.x), active_bounds.position.y + 20.0)
 		_:
-			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.end.y - 20.0)
+			return Vector2(_rng.randf_range(active_bounds.position.x, active_bounds.end.x), active_bounds.end.y - 20.0)
 
 func _on_story_node_entered(body: Node, node: Area2D) -> void:
 	if game_over or body != player or not is_instance_valid(node):
