@@ -195,13 +195,13 @@ const ITEM_TABLE := [
 ]
 
 @onready var player = $Player
-@onready var health_label: Label = $UI/MarginContainer/VBoxContainer/HealthLabel
-@onready var stamina_label: Label = $UI/MarginContainer/VBoxContainer/StaminaLabel
-@onready var score_label: Label = $UI/MarginContainer/VBoxContainer/ScoreLabel
-@onready var status_label: Label = $UI/MarginContainer/VBoxContainer/StatusLabel
-@onready var message_label: Label = $UI/MarginContainer/VBoxContainer/MessageLabel
+@onready var health_label: Label = $UI/MarginContainer/VBoxContainer/StatusPanel/StatusMargin/StatusVBox/HealthLabel
+@onready var stamina_label: Label = $UI/MarginContainer/VBoxContainer/StatusPanel/StatusMargin/StatusVBox/StaminaLabel
+@onready var score_label: Label = $UI/MarginContainer/VBoxContainer/TopBar/TopBarMargin/ScoreLabel
+@onready var status_label: Label = $UI/MarginContainer/VBoxContainer/StatusPanel/StatusMargin/StatusVBox/StatusLabel
+@onready var message_label: Label = $UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin/MessageLabel
 @onready var restart_label: Label = $UI/MarginContainer/VBoxContainer/RestartLabel
-@onready var combat_log_label: Label = $UI/MarginContainer/VBoxContainer/CombatLogLabel
+@onready var combat_log_label: Label = $UI/MarginContainer/VBoxContainer/LogPanel/LogMargin/CombatLogLabel
 @onready var supply_caches: Node2D = $Supplies
 @onready var pressure_zones: Node2D = $PressureZones
 @onready var enemies: Node2D = $Enemies
@@ -224,6 +224,7 @@ var survival_items := {
 }
 var _rng := RandomNumberGenerator.new()
 var _combat_log := ""
+var _recent_log_messages: Array[String] = []
 var _last_resource_awarded := ""
 var needs := {}
 var reputation := {}
@@ -321,8 +322,8 @@ func _on_player_knocked_out() -> void:
 	_set_log("Knocked out — tune the build, learn the rhythm, run it back.")
 
 func _on_player_stats_changed(stats: Dictionary) -> void:
-	health_label.text = "Health: %d / %d   Damage: %d" % [stats["health"], stats["max_health"], stats["damage"]]
-	stamina_label.text = "Stamina: %d / %d   Grit: %d" % [stats["stamina"], stats["max_stamina"], stats["grit"]]
+	health_label.text = "HP %d/%d   DMG %d" % [stats["health"], stats["max_health"], stats["damage"]]
+	stamina_label.text = "STA %d/%d   Grit %d" % [stats["stamina"], stats["max_stamina"], stats["grit"]]
 	_update_score_label()
 
 func _on_player_status_changed(status_text: String) -> void:
@@ -676,11 +677,26 @@ func _format_timer() -> String:
 	return "%02d:%02d" % [int(seconds / 60), seconds % 60]
 
 func _needs_text() -> String:
-	return "Needs H:%d T:%d Sl:%d Hy:%d W:%d Safe:%d Bel:%d Pur:%d Worth:%d Hope:%s" % [
-		int(needs.get("hunger", 0)), int(needs.get("thirst", 0)), int(needs.get("sleep", 0)),
-		int(needs.get("hygiene", 0)), int(needs.get("warmth", 0)), int(needs.get("safety", 0)),
-		int(needs.get("belonging", 0)), int(needs.get("purpose", 0)), int(needs.get("self_worth", 0)), _hope_trend(),
-	]
+	var alerts: Array[String] = []
+	var checks := {
+		"hunger": "Hungry",
+		"thirst": "Thirsty",
+		"sleep": "Exhausted",
+		"hygiene": "Dirty",
+		"warmth": "Cold",
+		"safety": "Unsafe",
+		"belonging": "Isolated",
+		"purpose": "Aimless",
+		"self_worth": "Shaken",
+	}
+	for key in checks.keys():
+		if float(needs.get(key, 100.0)) < 45.0:
+			alerts.append(checks[key])
+	if alerts.is_empty():
+		alerts.append("Stable")
+	var visible_alerts := alerts.slice(0, 2)
+	visible_alerts.append("Hope %s" % _hope_trend())
+	return "Needs: %s" % " / ".join(visible_alerts)
 
 func _hope_trend() -> String:
 	if hope >= 70.0:
@@ -710,40 +726,51 @@ func _requirements_text() -> String:
 	var requirements := _resource_requirement()
 	var parts: Array[String] = []
 	for resource in requirements.keys():
-		parts.append("%s %d/%d" % [RESOURCE_TITLES.get(resource, resource.capitalize()), survival_items.get(resource, 0), requirements[resource]])
-	return "   ".join(parts)
+		var owned := int(survival_items.get(resource, 0))
+		var required := int(requirements[resource])
+		if owned < required:
+			parts.append("%s %d/%d" % [RESOURCE_TITLES.get(resource, resource.capitalize()), owned, required])
+	if parts.is_empty():
+		return "Ready for night. Spare supplies: %d" % supplies
+	return "Need: %s | Scrap: %d" % [", ".join(parts), supplies]
 
 func _inventory_text() -> String:
-	return "Fet-D:%d Food:%d Weapons:%d Gear:%d Supplies:%d" % [
-		survival_items["fet_d"],
-		survival_items["food"],
-		survival_items["weapons"],
-		survival_items["gear"],
-		supplies,
-	]
+	var stocked: Array[String] = []
+	for resource in survival_items.keys():
+		var amount := int(survival_items[resource])
+		if amount > 0:
+			stocked.append("%s x%d" % [RESOURCE_TITLES.get(resource, resource.capitalize()), amount])
+	if supplies > 0:
+		stocked.append("Scrap x%d" % supplies)
+	if stocked.is_empty():
+		return "Pack: empty"
+	return "Pack: %s" % ", ".join(stocked.slice(0, 4))
 
 func _set_log(text: String) -> void:
 	if _pending_identity_quote != "" and text != _pending_identity_quote:
 		text = "%s / %s" % [text, _pending_identity_quote]
 		_pending_identity_quote = ""
-	_combat_log = text
+	_recent_log_messages.push_front(text)
+	if _recent_log_messages.size() > 2:
+		_recent_log_messages.resize(2)
+	_combat_log = "\n".join(_recent_log_messages)
 	if combat_log_label != null:
-		combat_log_label.text = "Log: " + _combat_log
+		combat_log_label.text = "Log\n" + _combat_log
 
 func _update_score_label() -> void:
 	if score_label == null:
 		return
-	score_label.text = "%s %d  Time: %s  Nights: %d  Danger: %d" % [phase.capitalize(), day, _format_timer(), survived_nights, wave]
+	score_label.text = "%s %d   %s   Danger %d   Nights %d" % [phase.to_upper(), day, _format_timer(), wave, survived_nights]
 
 func _update_ui() -> void:
 	if game_over:
 		_update_score_label()
 		return
 	if phase == "day":
-		message_label.text = "Day %d: %s\n%s" % [day, _requirements_text(), _needs_text()]
+		message_label.text = "Objective: gather essentials before nightfall.\n%s\n%s" % [_requirements_text(), _needs_text()]
 	else:
-		message_label.text = "Night %d: survive until dawn. %s\n%s" % [day, _inventory_text(), _needs_text()]
-	restart_label.text = _identity_text() + "\nMove: WASD/Arrows   Interact/Attack: Space/J   Dash: Shift/K   Restart: R"
+		message_label.text = "Objective: survive until dawn. Keep moving.\n%s\n%s" % [_inventory_text(), _needs_text()]
+	restart_label.text = "%s\nControls: WASD/Arrows move   Space/J attack   Shift/K dash   R restart" % _identity_text()
 	_update_score_label()
 	if combat_log_label != null:
-		combat_log_label.text = "Log: " + _combat_log
+		combat_log_label.text = "Log\n" + _combat_log
