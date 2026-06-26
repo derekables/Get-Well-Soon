@@ -10,6 +10,34 @@ const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
 const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
+const LANDMARK_SPAWN_PADDING := 36.0
+const LANDMARK_BLOCKERS := [
+	Rect2(-1120, -850, 360, 220), # CornerStoreExterior
+	Rect2(800, -900, 400, 1800), # Alley
+	Rect2(-1120, 520, 380, 260), # ShelterExterior
+	Rect2(390, -820, 430, 250), # ClinicExterior
+	Rect2(-170, 430, 420, 300), # ParkCamp
+	Rect2(500, 210, 460, 310), # DangerBlock
+]
+const EXIT_CLEAR_POINTS := [
+	Vector2(-1080, -790),
+	Vector2(-910, -690),
+	Vector2(-1200, -790),
+	Vector2(1200, 0),
+]
+const AUTHORED_STORY_POSITIONS := [
+	Vector2(-650, -655),
+	Vector2(-830, 470),
+	Vector2(335, -630),
+	Vector2(-255, 385),
+]
+const AUTHORED_ITEM_POSITIONS := [
+	Vector2(-905, -560),
+	Vector2(-680, 585),
+	Vector2(330, -705),
+	Vector2(-65, 390),
+	Vector2(470, 165),
+]
 const VIEWPORT_RECT := Rect2(24, 72, 912, 420)
 const RESOURCE_TITLES := {
 	"fet_d": "Fet-D",
@@ -379,7 +407,7 @@ func _spawn_wave(level: int) -> void:
 	for i in range(count):
 		var enemy := ENEMY_SCENE.instantiate()
 		enemy.name = "%sThreat%d_%d" % [phase.capitalize(), level, i + 1]
-		enemy.global_position = _random_edge_position()
+		enemy.global_position = _safe_random_edge_position()
 		enemies.add_child(enemy)
 		enemy.setup(player, level)
 		enemy.defeated.connect(_on_enemy_defeated)
@@ -390,7 +418,7 @@ func _spawn_supply_caches(count: int) -> void:
 	for i in range(count):
 		var cache := SUPPLY_CACHE_SCENE.instantiate()
 		cache.name = "SupplyCache%d" % (i + 1)
-		cache.global_position = _random_play_position()
+		cache.global_position = _safe_random_play_position()
 		supply_caches.add_child(cache)
 		cache.collected.connect(_on_supply_collected)
 
@@ -398,46 +426,85 @@ func _spawn_pressure_zones(count: int) -> void:
 	for i in range(count):
 		var zone := PRESSURE_ZONE_SCENE.instantiate()
 		zone.name = "%sPressureZone%d" % [phase.capitalize(), i + 1]
-		zone.global_position = _random_play_position()
+		zone.global_position = _safe_random_play_position()
 		pressure_zones.add_child(zone)
 		zone.triggered.connect(_on_pressure_zone_triggered)
 
 func _spawn_story_nodes(count: int) -> void:
 	for i in range(count):
-		var node := Area2D.new()
-		node.name = "StoryNode%d" % (i + 1)
-		node.global_position = _random_play_position()
-		var shape := CollisionShape2D.new()
-		var circle := CircleShape2D.new()
-		circle.radius = 28.0
-		shape.shape = circle
-		node.add_child(shape)
-		var marker := Polygon2D.new()
-		marker.color = Color(0.2, 0.52, 1.0, 0.76)
-		marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
-		node.add_child(marker)
-		var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
-		node.set_meta("story_data", story_data)
-		story_nodes.add_child(node)
-		node.body_entered.connect(_on_story_node_entered.bind(node))
+		var story_position := _authored_or_random_position(AUTHORED_STORY_POSITIONS, i)
+		_spawn_story_node(i + 1, story_position)
+
+func _spawn_story_node(index: int, story_position: Vector2) -> void:
+	var node := Area2D.new()
+	node.name = "StoryNode%d" % index
+	node.global_position = _safe_position(story_position)
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 28.0
+	shape.shape = circle
+	node.add_child(shape)
+	var marker := Polygon2D.new()
+	marker.color = Color(0.2, 0.52, 1.0, 0.76)
+	marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
+	node.add_child(marker)
+	var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
+	node.set_meta("story_data", story_data)
+	story_nodes.add_child(node)
+	node.body_entered.connect(_on_story_node_entered.bind(node))
 
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
-		_spawn_item(_random_play_position())
+		_spawn_item(_authored_or_random_position(AUTHORED_ITEM_POSITIONS, i))
 
 func _spawn_item(spawn_position: Vector2) -> void:
 	var item := ITEM_SCENE.instantiate()
 	var item_data: Dictionary = ITEM_TABLE[_rng.randi_range(0, ITEM_TABLE.size() - 1)]
-	item.global_position = spawn_position.clamp(PLAY_RECT.position, PLAY_RECT.position + PLAY_RECT.size)
+	item.global_position = _safe_position(spawn_position)
 	items.add_child(item)
 	item.configure(item_data)
 	item.picked_up.connect(_on_item_picked_up)
+
+func _authored_or_random_position(authored_positions: Array, index: int) -> Vector2:
+	if index < authored_positions.size():
+		return authored_positions[index]
+	return _safe_random_play_position()
+
+func _safe_position(spawn_position: Vector2) -> Vector2:
+	var safe_position := spawn_position.clamp(PLAY_RECT.position, PLAY_RECT.position + PLAY_RECT.size)
+	if _is_spawn_blocked(safe_position):
+		return _safe_random_play_position()
+	return safe_position
+
+func _safe_random_play_position() -> Vector2:
+	for attempt in range(36):
+		var candidate := _random_play_position()
+		if not _is_spawn_blocked(candidate):
+			return candidate
+	return _random_play_position()
 
 func _random_play_position() -> Vector2:
 	return Vector2(
 		_rng.randf_range(PLAY_RECT.position.x + 44.0, PLAY_RECT.end.x - 44.0),
 		_rng.randf_range(PLAY_RECT.position.y + 44.0, PLAY_RECT.end.y - 44.0)
 	)
+
+func _safe_random_edge_position() -> Vector2:
+	for attempt in range(24):
+		var candidate := _random_edge_position()
+		if not _is_spawn_blocked(candidate):
+			return candidate
+	return _random_edge_position()
+
+func _is_spawn_blocked(candidate: Vector2) -> bool:
+	for blocker in LANDMARK_BLOCKERS:
+		var padded_blocker: Rect2 = blocker.grow(LANDMARK_SPAWN_PADDING)
+		if padded_blocker.has_point(candidate):
+			return true
+	for exit_point in EXIT_CLEAR_POINTS:
+		if candidate.distance_to(exit_point) < 96.0:
+			return true
+	return false
 
 func _random_edge_position() -> Vector2:
 	var side := _rng.randi_range(0, 3)
