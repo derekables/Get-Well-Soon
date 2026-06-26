@@ -10,6 +10,7 @@ const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
 const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
+const SHOP_PLAY_RECT := Rect2(-430, -230, 860, 460)
 const VIEWPORT_RECT := Rect2(24, 72, 912, 420)
 const RESOURCE_TITLES := {
 	"fet_d": "Fet-D",
@@ -207,6 +208,9 @@ const ITEM_TABLE := [
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
 @onready var story_nodes: Node2D = $StoryNodes
+@onready var shop_interactables: Node2D = get_node_or_null("ShopInteractables")
+
+@export var is_shop_interior := false
 
 var supplies := 0
 var day := 1
@@ -237,18 +241,20 @@ var need_decay_multiplier := 1.0
 var background := {}
 var traits: Array = []
 var _need_tick_timer := 0.0
+var _shop_visits_by_day := {}
 
 func _ready() -> void:
 	_rng.randomize()
 	start_position = player.position
-	player.play_area = PLAY_RECT
+	player.play_area = SHOP_PLAY_RECT if is_shop_interior else PLAY_RECT
 	player.stats_changed.connect(_on_player_stats_changed)
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
 	player.knocked_out.connect(_on_player_knocked_out)
 	_roll_character()
 	_start_phase("day")
-	_set_log("Day 1 started. Scavenge Fet-D, food, weapons, and gear before night falls.")
+	_connect_shop_interactables()
+	_set_log("Shop visit: use the shelf, counter, or door." if is_shop_interior else "Day 1 started. Scavenge Fet-D, food, weapons, and gear before night falls.")
 	_update_ui()
 
 func _process(delta: float) -> void:
@@ -357,17 +363,19 @@ func _start_phase(new_phase: String) -> void:
 	player.velocity = Vector2.ZERO
 	if phase == "day":
 		player.recover_between_phases(18 + day * 2, 55.0)
-		_spawn_supply_caches(STARTING_SUPPLY_CACHES + day)
-		_spawn_pressure_zones(STARTING_PRESSURE_ZONES + max(0, day - 1))
-		_spawn_wave(max(1, day - 1))
-		_spawn_loose_items(7 + min(day * 2, 10))
-		_spawn_story_nodes(STARTING_STORY_NODES + min(day, 5))
+		if not is_shop_interior:
+			_spawn_supply_caches(STARTING_SUPPLY_CACHES + day)
+			_spawn_pressure_zones(STARTING_PRESSURE_ZONES + max(0, day - 1))
+			_spawn_wave(max(1, day - 1))
+			_spawn_loose_items(7 + min(day * 2, 10))
+			_spawn_story_nodes(STARTING_STORY_NODES + min(day, 5))
 	else:
 		player.recover_between_phases(8, 25.0)
-		_spawn_pressure_zones(STARTING_PRESSURE_ZONES + day + 2)
-		_spawn_wave(wave)
-		_spawn_loose_items(3 + min(day, 5))
-		_spawn_story_nodes(2 + min(day, 4))
+		if not is_shop_interior:
+			_spawn_pressure_zones(STARTING_PRESSURE_ZONES + day + 2)
+			_spawn_wave(wave)
+			_spawn_loose_items(3 + min(day, 5))
+			_spawn_story_nodes(2 + min(day, 4))
 	_update_ui()
 
 func _spawn_wave(level: int) -> void:
@@ -450,6 +458,75 @@ func _random_edge_position() -> Vector2:
 			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.position.y + 20.0)
 		_:
 			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.end.y - 20.0)
+
+
+func _connect_shop_interactables() -> void:
+	if shop_interactables == null:
+		return
+	for child in shop_interactables.get_children():
+		if child is Area2D and not child.body_entered.is_connected(_on_shop_interactable_entered):
+			child.body_entered.connect(_on_shop_interactable_entered.bind(child))
+
+func _on_shop_interactable_entered(body: Node, interactable: Area2D) -> void:
+	if game_over or body != player or not is_instance_valid(interactable):
+		return
+	var action := str(interactable.get_meta("shop_action", ""))
+	match action:
+		"food_shelf":
+			_use_shop_food_shelf()
+		"clerk_counter":
+			_use_shop_clerk_counter()
+		"exit_door":
+			_return_outside_from_shop()
+
+func _shop_limit_key(action: String) -> String:
+	return "%s_%d" % [action, day]
+
+func _shop_uses_today(action: String) -> int:
+	return int(_shop_visits_by_day.get(_shop_limit_key(action), 0))
+
+func _record_shop_use(action: String) -> void:
+	var key := _shop_limit_key(action)
+	_shop_visits_by_day[key] = _shop_uses_today(action) + 1
+
+func _use_shop_food_shelf() -> void:
+	if _shop_uses_today("food_shelf") >= 1:
+		_set_log("Food shelf: picked clean for this visit. Come back another day.")
+		return
+	_record_shop_use("food_shelf")
+	_add_survival_item("food", 1)
+	_apply_need_modifiers({"hunger": 28, "safety": -2})
+	_apply_reputation_modifiers({"employment": -1})
+	_apply_identity_modifiers({"chases_resources": 1})
+	_set_log("Food shelf: +1 Food and hunger eased. The clerk notices the empty gap.")
+	_update_ui()
+
+func _use_shop_clerk_counter() -> void:
+	if _shop_uses_today("clerk_counter") >= 1:
+		_set_log("Clerk: one trade per visit. The counter is closed for now.")
+		return
+	if supplies <= 0:
+		_set_log("Clerk: bring one generic supply to trade for food, gear, or safer passage.")
+		return
+	_record_shop_use("clerk_counter")
+	supplies -= 1
+	var reward := ["food", "gear", "safety"][_rng.randi_range(0, 2)]
+	if reward == "safety":
+		_apply_need_modifiers({"safety": 18, "belonging": 4})
+		_apply_reputation_modifiers({"community": 1, "employment": 1})
+		_apply_identity_modifiers({"builds_relationships": 1, "changes_factions": 1})
+		_set_log("Clerk trade: -1 Scrap for safer passage and a little trust.")
+	else:
+		_add_survival_item(reward, 1)
+		_apply_need_modifiers({"hunger": 12} if reward == "food" else {"warmth": 12, "safety": 4})
+		_apply_reputation_modifiers({"employment": 1})
+		_apply_identity_modifiers({"takes_responsibility": 1})
+		_set_log("Clerk trade: -1 Scrap for +1 %s." % RESOURCE_TITLES.get(reward, reward.capitalize()))
+	_update_ui()
+
+func _return_outside_from_shop() -> void:
+	_set_log("Exit door: back outside.")
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _on_story_node_entered(body: Node, node: Area2D) -> void:
 	if game_over or body != player or not is_instance_valid(node):
