@@ -1,0 +1,70 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/area_exit.tscn" id="1_area_exit"]
+
+[node name="ShopInterior" type="Node2D"]
+visible = false
+
+[node name="Floor" type="ColorRect" parent="."]
+offset_left = -320.0
+offset_top = -220.0
+offset_right = 320.0
+offset_bottom = 220.0
+color = Color(0.23, 0.2, 0.16, 1)
+
+[node name="BackWall" type="ColorRect" parent="."]
+offset_left = -320.0
+offset_top = -220.0
+offset_right = 320.0
+offset_bottom = -184.0
+color = Color(0.12, 0.1, 0.09, 1)
+
+[node name="LeftWall" type="ColorRect" parent="."]
+offset_left = -320.0
+offset_top = -220.0
+offset_right = -284.0
+offset_bottom = 220.0
+color = Color(0.12, 0.1, 0.09, 1)
+
+[node name="RightWall" type="ColorRect" parent="."]
+offset_left = 284.0
+offset_top = -220.0
+offset_right = 320.0
+offset_bottom = 220.0
+color = Color(0.12, 0.1, 0.09, 1)
+
+[node name="FrontWallLeft" type="ColorRect" parent="."]
+offset_left = -320.0
+offset_top = 184.0
+offset_right = -72.0
+offset_bottom = 220.0
+color = Color(0.12, 0.1, 0.09, 1)
+
+[node name="FrontWallRight" type="ColorRect" parent="."]
+offset_left = 72.0
+offset_top = 184.0
+offset_right = 320.0
+offset_bottom = 220.0
+color = Color(0.12, 0.1, 0.09, 1)
+
+[node name="Counter" type="ColorRect" parent="."]
+offset_left = -220.0
+offset_top = -142.0
+offset_right = 140.0
+offset_bottom = -72.0
+color = Color(0.42, 0.27, 0.13, 1)
+
+[node name="NPCMarker" type="Polygon2D" parent="."]
+position = Vector2(188, -108)
+color = Color(0.3, 0.75, 1, 1)
+polygon = PackedVector2Array(0, -24, 18, 10, 0, 24, -18, 10)
+
+[node name="ShopSpawn" type="Marker2D" parent="."]
+position = Vector2(0, 110)
+
+[node name="ExitToBlock" parent="." instance=ExtResource("1_area_exit")]
+position = Vector2(0, 185)
+source_area = "shop_interior"
+target_area = "outdoor_block"
+target_spawn = "shop_door_outside"
+display_name = "Street Block"

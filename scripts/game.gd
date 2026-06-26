@@ -9,35 +9,11 @@ const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const ITEM_SCENE := preload("res://scenes/item_pickup.tscn")
 const SUPPLY_CACHE_SCENE := preload("res://scenes/supply_cache.tscn")
 const PRESSURE_ZONE_SCENE := preload("res://scenes/pressure_zone.tscn")
+const STORY_NODE_SCRIPT := preload("res://scripts/story_node.gd")
 const PLAY_RECT := Rect2(-1200, -900, 2400, 1800)
-const LANDMARK_SPAWN_PADDING := 36.0
-const LANDMARK_BLOCKERS := [
-	Rect2(-1120, -850, 360, 220), # CornerStoreExterior
-	Rect2(800, -900, 400, 1800), # Alley
-	Rect2(-1120, 520, 380, 260), # ShelterExterior
-	Rect2(390, -820, 430, 250), # ClinicExterior
-	Rect2(-170, 430, 420, 300), # ParkCamp
-	Rect2(500, 210, 460, 310), # DangerBlock
-]
-const EXIT_CLEAR_POINTS := [
-	Vector2(-1080, -790),
-	Vector2(-910, -690),
-	Vector2(-1200, -790),
-	Vector2(1200, 0),
-]
-const AUTHORED_STORY_POSITIONS := [
-	Vector2(-650, -655),
-	Vector2(-830, 470),
-	Vector2(335, -630),
-	Vector2(-255, 385),
-]
-const AUTHORED_ITEM_POSITIONS := [
-	Vector2(-905, -560),
-	Vector2(-680, 585),
-	Vector2(330, -705),
-	Vector2(-65, 390),
-	Vector2(470, 165),
-]
+const SHOP_INTERIOR_RECT := Rect2(3000 - 284, -184, 568, 368)
+const AREA_OUTDOOR := "outdoor_block"
+const AREA_SHOP := "shop_interior"
 const VIEWPORT_RECT := Rect2(24, 72, 912, 420)
 const RESOURCE_TITLES := {
 	"fet_d": "Fet-D",
@@ -228,6 +204,7 @@ const ITEM_TABLE := [
 @onready var score_label: Label = $UI/MarginContainer/VBoxContainer/TopBar/TopBarMargin/ScoreLabel
 @onready var status_label: Label = $UI/MarginContainer/VBoxContainer/StatusPanel/StatusMargin/StatusVBox/StatusLabel
 @onready var message_label: Label = $UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin/MessageLabel
+@onready var interaction_prompt_label: Label = $UI/MarginContainer/VBoxContainer/ObjectivePanel/ObjectiveMargin/InteractionPromptLabel
 @onready var restart_label: Label = $UI/MarginContainer/VBoxContainer/RestartLabel
 @onready var combat_log_label: Label = $UI/MarginContainer/VBoxContainer/LogPanel/LogMargin/CombatLogLabel
 @onready var supply_caches: Node2D = $Supplies
@@ -235,6 +212,9 @@ const ITEM_TABLE := [
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
 @onready var story_nodes: Node2D = $StoryNodes
+@onready var shop_interior: Node2D = $ShopInterior
+@onready var shop_entrance: Area2D = $ShopEntrance
+@onready var shop_door_outside_spawn: Marker2D = $ShopDoorOutsideSpawn
 
 var supplies := 0
 var day := 1
@@ -243,6 +223,9 @@ var phase := "day"
 var phase_time_remaining := DAY_DURATION
 var wave := 1
 var start_position := Vector2.ZERO
+var current_area_name := AREA_OUTDOOR
+var active_bounds := PLAY_RECT
+var area_spawn_points := {}
 var game_over := false
 var survival_items := {
 	"fet_d": 0,
@@ -269,14 +252,23 @@ var _need_tick_timer := 0.0
 func _ready() -> void:
 	_rng.randomize()
 	start_position = player.position
-	player.play_area = PLAY_RECT
+	area_spawn_points = {
+		"default": start_position,
+		"shop_spawn": shop_interior.global_position + shop_interior.get_node("ShopSpawn").position,
+		"shop_door_outside": shop_door_outside_spawn.global_position,
+	}
+	_set_active_area(AREA_OUTDOOR, start_position, false, "")
+	_connect_area_exits()
 	player.stats_changed.connect(_on_player_stats_changed)
 	player.status_changed.connect(_on_player_status_changed)
 	player.attack_landed.connect(_on_attack_landed)
+	player.interaction_changed.connect(_on_player_interaction_changed)
+	player.interaction_requested.connect(_on_player_interaction_requested)
 	player.knocked_out.connect(_on_player_knocked_out)
 	_roll_character()
 	_start_phase("day")
 	_set_log("Day 1 started. Scavenge Fet-D, food, weapons, and gear before night falls.")
+	_spawn_shop_doors()
 	_update_ui()
 
 func _process(delta: float) -> void:
@@ -291,8 +283,9 @@ func _process(delta: float) -> void:
 	_update_ui()
 
 func _on_supply_collected(cache: Area2D) -> void:
-	if game_over:
+	if game_over or not is_instance_valid(cache):
 		return
+	player.clear_interactable(cache)
 	supplies += 1
 	player.add_supply(1)
 	_apply_identity_modifiers({"chases_resources": 1})
@@ -373,6 +366,7 @@ func _complete_phase() -> void:
 		_set_log("Dawn broke. You survived %d night(s); requirements and danger increased." % survived_nights)
 
 func _start_phase(new_phase: String) -> void:
+	_set_active_area(AREA_OUTDOOR, start_position, false, "")
 	phase = new_phase
 	phase_time_remaining = DAY_DURATION if phase == "day" else NIGHT_DURATION
 	wave = day if phase == "day" else day + survived_nights + 1
@@ -383,6 +377,7 @@ func _start_phase(new_phase: String) -> void:
 	_clear_container(story_nodes)
 	player.position = start_position
 	player.velocity = Vector2.ZERO
+	player.play_area = active_bounds
 	if phase == "day":
 		player.recover_between_phases(18 + day * 2, 55.0)
 		_spawn_supply_caches(STARTING_SUPPLY_CACHES + day)
@@ -397,6 +392,43 @@ func _start_phase(new_phase: String) -> void:
 		_spawn_loose_items(3 + min(day, 5))
 		_spawn_story_nodes(2 + min(day, 4))
 	_update_ui()
+
+func _connect_area_exits() -> void:
+	for node in get_tree().get_nodes_in_group("area_exit"):
+		if node.has_signal("transition_requested"):
+			node.transition_requested.connect(_on_area_transition_requested)
+
+func _on_area_transition_requested(exit: Area2D) -> void:
+	if game_over or exit.get("source_area") != current_area_name:
+		return
+	var spawn_name := str(exit.get("target_spawn"))
+	var spawn_position: Vector2 = area_spawn_points.get(spawn_name, start_position)
+	_set_active_area(str(exit.get("target_area")), spawn_position, true, str(exit.get("display_name")))
+
+func _set_active_area(area_name: String, spawn_position: Vector2, clear_outdoor_entities: bool, title: String) -> void:
+	current_area_name = area_name
+	active_bounds = SHOP_INTERIOR_RECT if current_area_name == AREA_SHOP else PLAY_RECT
+	shop_interior.visible = current_area_name == AREA_SHOP
+	player.play_area = active_bounds
+	player.position = spawn_position.clamp(active_bounds.position, active_bounds.position + active_bounds.size)
+	player.velocity = Vector2.ZERO
+	if player.camera != null:
+		player.camera.limit_left = int(active_bounds.position.x)
+		player.camera.limit_top = int(active_bounds.position.y)
+		player.camera.limit_right = int(active_bounds.end.x)
+		player.camera.limit_bottom = int(active_bounds.end.y)
+	if clear_outdoor_entities and current_area_name == AREA_SHOP:
+		_clear_outdoor_procedural_entities()
+	if title != "":
+		_set_log(title)
+		message_label.text = title
+
+func _clear_outdoor_procedural_entities() -> void:
+	_clear_container(supply_caches)
+	_clear_container(pressure_zones)
+	_clear_container(enemies)
+	_clear_container(items)
+	_clear_container(story_nodes)
 
 func _spawn_wave(level: int) -> void:
 	var count := 0
@@ -413,6 +445,44 @@ func _spawn_wave(level: int) -> void:
 		enemy.defeated.connect(_on_enemy_defeated)
 		enemy.struck_player.connect(_on_enemy_struck_player)
 	_set_log("%s %d danger level %d: %d threats on the block." % [phase.capitalize(), day, level, count])
+
+func _spawn_shop_doors() -> void:
+	var door := Area2D.new()
+	door.name = "CornerStoreDoor"
+	door.global_position = Vector2(-1070, -710)
+	door.set_script(preload("res://scripts/interaction_marker.gd"))
+	door.set("interaction_label", "Enter Corner Store")
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(82, 46)
+	shape.shape = rect
+	door.add_child(shape)
+	var marker := Polygon2D.new()
+	marker.color = Color(0.55, 0.38, 0.18, 0.86)
+	marker.polygon = PackedVector2Array(Vector2(-40, -22), Vector2(40, -22), Vector2(40, 22), Vector2(-40, 22))
+	door.add_child(marker)
+	add_child(door)
+	door.connect("interacted", _on_shop_door_interacted)
+
+func _on_shop_door_interacted(door: Area2D) -> void:
+	if game_over:
+		return
+	_set_log("Corner Store: you duck inside, trade news, and find a little shelter.")
+	_apply_need_modifiers({"safety": 8, "warmth": 6, "belonging": 3})
+	_adjust_hope(1.0)
+	_update_ui()
+
+func _on_player_interaction_changed(label: String) -> void:
+	if interaction_prompt_label == null:
+		return
+	interaction_prompt_label.visible = label != ""
+	interaction_prompt_label.text = "Space/J: %s" % label if label != "" else ""
+
+func _on_player_interaction_requested(target: Node) -> void:
+	if game_over or not is_instance_valid(target):
+		return
+	if target.has_method("interact"):
+		target.call("interact", self)
 
 func _spawn_supply_caches(count: int) -> void:
 	for i in range(count):
@@ -432,26 +502,22 @@ func _spawn_pressure_zones(count: int) -> void:
 
 func _spawn_story_nodes(count: int) -> void:
 	for i in range(count):
-		var story_position := _authored_or_random_position(AUTHORED_STORY_POSITIONS, i)
-		_spawn_story_node(i + 1, story_position)
-
-func _spawn_story_node(index: int, story_position: Vector2) -> void:
-	var node := Area2D.new()
-	node.name = "StoryNode%d" % index
-	node.global_position = _safe_position(story_position)
-	var shape := CollisionShape2D.new()
-	var circle := CircleShape2D.new()
-	circle.radius = 28.0
-	shape.shape = circle
-	node.add_child(shape)
-	var marker := Polygon2D.new()
-	marker.color = Color(0.2, 0.52, 1.0, 0.76)
-	marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
-	node.add_child(marker)
-	var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
-	node.set_meta("story_data", story_data)
-	story_nodes.add_child(node)
-	node.body_entered.connect(_on_story_node_entered.bind(node))
+		var node := Area2D.new()
+		node.name = "StoryNode%d" % (i + 1)
+		node.set_script(STORY_NODE_SCRIPT)
+		node.global_position = _random_play_position()
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = 28.0
+		shape.shape = circle
+		node.add_child(shape)
+		var marker := Polygon2D.new()
+		marker.color = Color(0.2, 0.52, 1.0, 0.76)
+		marker.polygon = PackedVector2Array(Vector2(0, -24), Vector2(22, 0), Vector2(0, 24), Vector2(-22, 0))
+		node.add_child(marker)
+		var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
+		node.call("configure", story_data)
+		story_nodes.add_child(node)
 
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
@@ -460,13 +526,12 @@ func _spawn_loose_items(count: int) -> void:
 func _spawn_item(spawn_position: Vector2) -> void:
 	var item := ITEM_SCENE.instantiate()
 	var item_data: Dictionary = ITEM_TABLE[_rng.randi_range(0, ITEM_TABLE.size() - 1)]
-	item.global_position = _safe_position(spawn_position)
+	item.global_position = spawn_position.clamp(active_bounds.position, active_bounds.position + active_bounds.size)
 	items.add_child(item)
 	item.configure(item_data)
 	item.picked_up.connect(_on_item_picked_up)
 
 func _authored_or_random_position(authored_positions: Array, index: int) -> Vector2:
-	if index < authored_positions.size():
 		return authored_positions[index]
 	return _safe_random_play_position()
 
@@ -474,6 +539,7 @@ func _safe_position(spawn_position: Vector2) -> Vector2:
 	var safe_position := spawn_position.clamp(PLAY_RECT.position, PLAY_RECT.position + PLAY_RECT.size)
 	if _is_spawn_blocked(safe_position):
 		return _safe_random_play_position()
+	if index < authored_positions.size():
 	return safe_position
 
 func _safe_random_play_position() -> Vector2:
@@ -485,8 +551,8 @@ func _safe_random_play_position() -> Vector2:
 
 func _random_play_position() -> Vector2:
 	return Vector2(
-		_rng.randf_range(PLAY_RECT.position.x + 44.0, PLAY_RECT.end.x - 44.0),
-		_rng.randf_range(PLAY_RECT.position.y + 44.0, PLAY_RECT.end.y - 44.0)
+		_rng.randf_range(active_bounds.position.x + 44.0, active_bounds.end.x - 44.0),
+		_rng.randf_range(active_bounds.position.y + 44.0, active_bounds.end.y - 44.0)
 	)
 
 func _safe_random_edge_position() -> Vector2:
@@ -510,17 +576,18 @@ func _random_edge_position() -> Vector2:
 	var side := _rng.randi_range(0, 3)
 	match side:
 		0:
-			return Vector2(PLAY_RECT.position.x + 20.0, _rng.randf_range(PLAY_RECT.position.y, PLAY_RECT.end.y))
+			return Vector2(active_bounds.position.x + 20.0, _rng.randf_range(active_bounds.position.y, active_bounds.end.y))
 		1:
-			return Vector2(PLAY_RECT.end.x - 20.0, _rng.randf_range(PLAY_RECT.position.y, PLAY_RECT.end.y))
+			return Vector2(active_bounds.end.x - 20.0, _rng.randf_range(active_bounds.position.y, active_bounds.end.y))
 		2:
-			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.position.y + 20.0)
+			return Vector2(_rng.randf_range(active_bounds.position.x, active_bounds.end.x), active_bounds.position.y + 20.0)
 		_:
-			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.end.y - 20.0)
+			return Vector2(_rng.randf_range(active_bounds.position.x, active_bounds.end.x), active_bounds.end.y - 20.0)
 
-func _on_story_node_entered(body: Node, node: Area2D) -> void:
-	if game_over or body != player or not is_instance_valid(node):
+func resolve_story_node(node: Area2D) -> void:
+	if game_over or not is_instance_valid(node):
 		return
+	player.clear_interactable(node)
 	var story_data: Dictionary = node.get_meta("story_data", {})
 	_apply_story_node(story_data)
 	node.queue_free()
