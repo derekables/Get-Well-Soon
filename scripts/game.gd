@@ -207,6 +207,8 @@ const ITEM_TABLE := [
 @onready var enemies: Node2D = $Enemies
 @onready var items: Node2D = $Items
 @onready var story_nodes: Node2D = $StoryNodes
+@onready var interaction_area: Area2D = $Player/InteractionArea
+@onready var interaction_prompt_label: Label = $UI/MarginContainer/VBoxContainer/InteractionPromptLabel
 
 var supplies := 0
 var day := 1
@@ -236,6 +238,7 @@ var need_decay_multiplier := 1.0
 var background := {}
 var traits: Array = []
 var _need_tick_timer := 0.0
+var _nearest_interactable: Node = null
 
 func _ready() -> void:
 	_rng.randomize()
@@ -255,6 +258,9 @@ func _process(delta: float) -> void:
 		get_tree().reload_current_scene()
 	if game_over:
 		return
+	_update_nearest_interactable()
+	if Input.is_action_just_pressed("attack"):
+		_try_interact_or_attack()
 	_update_needs(delta)
 	phase_time_remaining -= delta
 	if phase_time_remaining <= 0.0:
@@ -417,8 +423,9 @@ func _spawn_story_nodes(count: int) -> void:
 		node.add_child(marker)
 		var story_data: Dictionary = STORY_TABLE[_rng.randi_range(0, STORY_TABLE.size() - 1)]
 		node.set_meta("story_data", story_data)
+		node.set_meta("interaction_label", story_data.get("title", "Story"))
+		node.set_meta("interaction_kind", "story")
 		story_nodes.add_child(node)
-		node.body_entered.connect(_on_story_node_entered.bind(node))
 
 func _spawn_loose_items(count: int) -> void:
 	for i in range(count):
@@ -450,12 +457,67 @@ func _random_edge_position() -> Vector2:
 		_:
 			return Vector2(_rng.randf_range(PLAY_RECT.position.x, PLAY_RECT.end.x), PLAY_RECT.end.y - 20.0)
 
-func _on_story_node_entered(body: Node, node: Area2D) -> void:
-	if game_over or body != player or not is_instance_valid(node):
+
+func _update_nearest_interactable() -> void:
+	_nearest_interactable = null
+	var best_distance := INF
+	for area in interaction_area.get_overlapping_areas():
+		if not _is_interactable(area):
+			continue
+		var distance := player.global_position.distance_squared_to(area.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			_nearest_interactable = area
+	_update_interaction_prompt()
+
+func _is_interactable(node: Node) -> bool:
+	return is_instance_valid(node) and (node.has_method("interact") or node.has_meta("interaction_kind") or node.has_meta("interaction_label"))
+
+func _try_interact_or_attack() -> void:
+	if is_instance_valid(_nearest_interactable):
+		_interact_with(_nearest_interactable)
+	else:
+		player.try_attack()
+
+func _interact_with(interactable: Node) -> void:
+	if game_over or not is_instance_valid(interactable):
 		return
-	var story_data: Dictionary = node.get_meta("story_data", {})
-	_apply_story_node(story_data)
-	node.queue_free()
+	if interactable.has_method("interact"):
+		interactable.interact(self)
+		return
+	match str(interactable.get_meta("interaction_kind", "")):
+		"story":
+			var story_data: Dictionary = interactable.get_meta("story_data", {})
+			_apply_story_node(story_data)
+			interactable.queue_free()
+		"shop_door":
+			_enter_corner_store()
+		_:
+			pass
+
+func _interaction_label(interactable: Node) -> String:
+	if not is_instance_valid(interactable):
+		return ""
+	if interactable.has_method("get_interaction_label"):
+		return interactable.get_interaction_label()
+	return str(interactable.get_meta("interaction_label", "Interact"))
+
+func _update_interaction_prompt() -> void:
+	if interaction_prompt_label == null:
+		return
+	if is_instance_valid(_nearest_interactable):
+		interaction_prompt_label.text = "Space/J: " + _interaction_label(_nearest_interactable)
+		interaction_prompt_label.visible = true
+	else:
+		interaction_prompt_label.text = ""
+		interaction_prompt_label.visible = false
+
+func _enter_corner_store() -> void:
+	_add_survival_item("food", 1)
+	_apply_need_modifiers({"hunger": 10, "thirst": 4, "safety": 2})
+	_apply_identity_modifiers({"changes_factions": 1})
+	_set_log("Corner Store: you step inside, breathe, and grab food for later.")
+	_update_ui()
 
 func _apply_story_node(story_data: Dictionary) -> void:
 	if story_data.is_empty():

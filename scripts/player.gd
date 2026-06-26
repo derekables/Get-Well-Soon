@@ -154,8 +154,6 @@ func get_attack_damage() -> int:
 	return max(1, damage)
 
 func _handle_actions() -> void:
-	if Input.is_action_just_pressed("attack"):
-		_try_attack()
 	if Input.is_action_just_pressed("dash"):
 		_try_dash()
 
@@ -175,7 +173,7 @@ func _move_player(delta: float) -> void:
 	if _attack_active_timer <= 0.0:
 		_update_attack_area_transform()
 
-func _try_attack() -> void:
+func try_attack() -> void:
 	if _attack_timer > 0.0 or stamina < 10.0 or health <= 0:
 		return
 	stamina -= 10.0

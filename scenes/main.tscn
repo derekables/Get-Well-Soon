@@ -1,7 +1,10 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/game.gd" id="4_game"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_corner_store_door"]
+size = Vector2(120, 80)
 
 [node name="Game" type="Node2D"]
 script = ExtResource("4_game")
@@ -26,6 +29,18 @@ offset_top = -860.0
 offset_right = -980.0
 offset_bottom = -720.0
 color = Color(0.23, 0.22, 0.2, 1)
+
+[node name="CornerStoreDoor" type="Area2D" parent="."]
+position = Vector2(-1070, -710)
+metadata/interaction_kind = "shop_door"
+metadata/interaction_label = "Enter Corner Store"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CornerStoreDoor"]
+shape = SubResource("RectangleShape2D_corner_store_door")
+
+[node name="DoorMarker" type="Polygon2D" parent="CornerStoreDoor"]
+color = Color(0.95, 0.82, 0.34, 0.55)
+polygon = PackedVector2Array(-60, -40, 60, -40, 60, 40, -60, 40)
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
 position = Vector2(-1080, -790)
@@ -96,6 +111,12 @@ text = "Day 1: collect supplies, watch needs, and follow story markers before ni
 [node name="RestartLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
 text = "Move: WASD/Arrows   Attack: Space/J   Dash: Shift/K   Restart: R"
+
+[node name="InteractionPromptLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
+visible = false
+layout_mode = 2
+text = "Space/J: Interact"
+horizontal_alignment = 1
 
 [node name="CombatLogLabel" type="Label" parent="UI/MarginContainer/VBoxContainer"]
 layout_mode = 2
