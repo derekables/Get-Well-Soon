@@ -47,6 +47,9 @@ func _ready() -> void:
 	# Ensure visible for debugging
 	body.visible = true
 	camera.make_current()
+	# Position the camera at the player's location so it starts looking at the right place
+	camera.global_position = global_position
+	print("Camera positioned at: ", camera.global_position)
 	# Try to bind play_area from the current scene's PlayArea node if present.
 	_bind_play_area()
 	print("Player._ready after bind: play_area=", play_area, " camera_current=", camera.is_current(), " camera_zoom=", camera.zoom)
