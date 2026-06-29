@@ -42,11 +42,14 @@ var _statuses := {}
 var _status_tick_timer := 0.0
 
 func _ready() -> void:
-	print_debug("Player._ready start: position=", position, " play_area=", play_area)
+	# Use print (not print_debug) so output appears in web builds and the editor console.
+	print("Player._ready start: path=", get_path(), " position=", position, " play_area=", play_area)
+	# Ensure visible for debugging
+	body.visible = true
 	camera.make_current()
 	# Try to bind play_area from the current scene's PlayArea node if present.
 	_bind_play_area()
-	print_debug("Player._ready after bind: play_area=", play_area)
+	print("Player._ready after bind: play_area=", play_area, " camera_current=", camera.is_current(), " camera_zoom=", camera.zoom)
 	attack_area.body_entered.connect(_on_attack_body_entered)
 	interaction_area.area_entered.connect(_on_interaction_area_entered)
 	interaction_area.area_exited.connect(_on_interaction_area_exited)
@@ -59,12 +62,12 @@ func _bind_play_area() -> void:
 	# Get the active scene (the one you opened in the editor/run-time)
 	var scene := get_tree().get_current_scene()
 	if scene == null:
-		print_debug("Player._bind_play_area: no current_scene")
+		print("Player._bind_play_area: no current_scene")
 		return
 	# Look for a node named PlayArea under the current scene
 	var pa := scene.get_node_or_null("PlayArea")
 	if pa == null:
-		print_debug("Player._bind_play_area: no PlayArea node found")
+		print("Player._bind_play_area: no PlayArea node found")
 		return
 	# Try to read offset_left/top/right/bottom properties (used in scenes/main.tscn)
 	var left := null
@@ -84,24 +87,24 @@ func _bind_play_area() -> void:
 		if pa.has_method("get_rect"):
 			var r = pa.get_rect()
 			play_area = Rect2(r.position, r.size)
-			print_debug("Player._bind_play_area: bound from get_rect(): ", play_area)
+			print("Player._bind_play_area: bound from get_rect(): ", play_area)
 			return
 		# Try position/size properties
 		if pa.has_method("get_position") and pa.has_method("get_size"):
 			var p = pa.get_position()
 			var s = pa.get_size()
 			play_area = Rect2(p, s)
-			print_debug("Player._bind_play_area: bound from position/size: ", play_area)
+			print("Player._bind_play_area: bound from position/size: ", play_area)
 			return
 		# Nothing worked — leave default and log
-		print_debug("Player._bind_play_area: could not read PlayArea offsets; using default: ", play_area)
+		print("Player._bind_play_area: could not read PlayArea offsets; using default: ", play_area)
 		return
 
 	# Compute Rect2 from offsets (cast to float defensively)
 	var pos := Vector2(float(left), float(top))
 	var size := Vector2(float(right) - float(left), float(bottom) - float(top))
 	play_area = Rect2(pos, size)
-	print_debug("Player._bind_play_area: bound from offsets: ", play_area)
+	print("Player._bind_play_area: bound from offsets: ", play_area)
 
 func _physics_process(delta: float) -> void:
 	_update_timers(delta)
