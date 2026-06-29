@@ -8,7 +8,8 @@ signal interaction_requested(target: Node)
 signal knocked_out
 
 @export var base_speed := 285.0
-@export var play_area := Rect2(24, 72, 912, 420)
+# Default expanded bounds; will be overridden at runtime if the current scene has a PlayArea node.
+@export var play_area := Rect2(-1200, -900, 2400, 1800)
 @export var max_health := 100
 @export var max_stamina := 100.0
 @export var base_damage := 16
@@ -42,6 +43,8 @@ var _status_tick_timer := 0.0
 
 func _ready() -> void:
 	camera.make_current()
+	# Try to bind play_area from the current scene's PlayArea node if present.
+	_bind_play_area()
 	attack_area.body_entered.connect(_on_attack_body_entered)
 	interaction_area.area_entered.connect(_on_interaction_area_entered)
 	interaction_area.area_exited.connect(_on_interaction_area_exited)
@@ -49,6 +52,28 @@ func _ready() -> void:
 	attack_shape.disabled = true
 	attack_arc.visible = false
 	_emit_all_stats()
+
+func _bind_play_area() -> void:
+	# Get the active scene (the one you opened in the editor/run-time)
+	var scene := get_tree().get_current_scene()
+	if scene == null:
+		return
+	# Look for a node named PlayArea under the current scene
+	if not scene.has_node("PlayArea"):
+		return
+	var pa := scene.get_node("PlayArea")
+	# Try to read offset_left/top/right/bottom properties (used in scenes/main.tscn)
+	var left := pa.get("offset_left")
+	var top := pa.get("offset_top")
+	var right := pa.get("offset_right")
+	var bottom := pa.get("offset_bottom")
+	if typeof(left) == TYPE_NIL or typeof(top) == TYPE_NIL or typeof(right) == TYPE_NIL or typeof(bottom) == TYPE_NIL:
+		# Could not read offsets; leave default play_area in place
+		return
+	# Compute Rect2 from offsets
+	var pos := Vector2(left, top)
+	var size := Vector2(right - left, bottom - top)
+	play_area = Rect2(pos, size)
 
 func _physics_process(delta: float) -> void:
 	_update_timers(delta)
@@ -185,6 +210,7 @@ func _move_player(delta: float) -> void:
 	else:
 		velocity = direction * speed
 	move_and_slide()
+	# Keep the player within the playable area
 	position = position.clamp(play_area.position, play_area.position + play_area.size)
 	if _attack_active_timer <= 0.0:
 		_update_attack_area_transform()
