@@ -8,6 +8,9 @@ size = Vector2(34, 34)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_attack"]
 size = Vector2(52, 34)
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_interaction"]
+radius = 16
+
 [node name="Player" type="CharacterBody2D" groups=["player"]]
 script = ExtResource("1_player")
 
